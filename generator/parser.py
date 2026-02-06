@@ -27,75 +27,6 @@ REFL_CUSTOM = {
     'r_array_t': 'K_DYN_ARRAY'
 }
 
-def extract_enum_hints(dot_h_path: str) -> list[str]:
-    with open(dot_h_path) as f:
-        content = f.read()
-
-    ret = []
-
-    reflects = re.finditer(r'REFLECT\(enum\)\s*{(?P<body>.+?)}\s*(?P<typename>\w+);', content, re.DOTALL)
-    for enum in reflects:
-        ret.append(enum.group("typename"))
-
-    return ret
-
-
-
-def extract_struct_union_hints(dot_h_path: str) -> tuple[ dict[dict[str, str], str], dict[dict[str, str], str] ]:
-
-    struct_hints = {}
-    union_hints = {}
-    
-    with open(dot_h_path) as f:
-        content = f.read()
-
-    block_starts = re.finditer(r'REFLECT\((?P<kind>[^)]+)\)\s*{', content)
-
-    for start in block_starts:
-        struct_or_union = True
-        match start.group("kind"):
-            case "enum":
-                continue
-            case "struct":
-                struct_or_union = False
-            case _:
-                struct_or_union = True
- 
-
-        st = start.end() # at the '{'
-        idx = st 
-        brace_level = 1
-
-        while(idx < len(content) and brace_level > 0):
-            char = content[idx]
-            if   char == '{' : brace_level += 1
-            elif char == '}' : brace_level -= 1
-            idx += 1
-        
-        body = content[st : idx - 1]
-        typename = re.search(r'\s*(?P<name>\w+);', content[idx:])
-        if not typename: continue
-        typename = typename.group("name")
-        if struct_or_union:
-            union_hints[typename] = {}
-        else:
-            struct_hints[typename] = {}
-
-        patterns = [
-            r'DYN_ARRAY\((?P<type>[^)]+)\)\s+(?P<name>\w+)',
-            r'OPTION\((?P<type>[^)]+)\)\s+(?P<name>\w+)'
-        ]
-
-        for pattern in patterns:
-            for match in re.finditer(pattern, body):
-                if struct_or_union:
-                    union_hints[typename][match.group("name")] = match.group("type")
-                else:
-                    struct_hints[typename][match.group("name")] = match.group("type")
-
-
-    return struct_hints, union_hints
-
 
 def print_extracted(header):
     enum_hints = extract_enum_hints(header)
@@ -121,22 +52,19 @@ class ReflVisitor(c_ast.NodeVisitor):
         self.hstructs = struct_hints
         self.hunions = union_hints
 
-    def visit_Typedecl(self, node):
-        typename = node.name
-        # Check keys explicitly
-        if (typename in self.henums or 
-            typename in self.hstructs or 
-            typename in self.hunions):
-            
+    def visit_TypeDecl(self, node: c_ast.TypeDecl):
+        typename = node.declname  # <-- use declname, not name
+
+        if typename in self.henums or typename in self.hstructs or typename in self.hunions:
             print(f"\n[FOUND REFLECTED TYPE]: {typename}")
-            
-            # Drill down to find the struct/union/enum members
-            # Typedef -> TypeDecl -> Struct/Union/Enum
-            target = node.type.type
-            
-            if hasattr(target, 'decls') and target.decls:
-                for member in target.decls:
-                    print(f"  Field: {member.name}")
+
+            target = node.type  # type can be Struct, Union, Enum, IdentifierType
+
+            if isinstance(target, c_ast.Struct) or isinstance(target, c_ast.Union):
+                if target.decls:  # may be None for empty structs/unions
+                    for member in target.decls:
+                        print(f"  Field: {member.name} ({member.type.__class__.__name__})")
+
             elif isinstance(target, c_ast.Enum):
                 for item in target.values.enumerators:
                     print(f"  Enum Constant: {item.name}")
