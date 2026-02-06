@@ -35,12 +35,15 @@ class CReflEngine:
     def _parse_header(self, dot_h_path: str):
         print(f"Tried to parse: {dot_h_path}")
         ast = pc.parse_file(dot_h_path)
-        v = parser.ReflVisitor(
+        v = parser.ReflVisitor( 
+            dot_h_path,
             enum_hints=self.hints_enum, 
             struct_hints=self.hints_struct, 
-            union_hints=self.hints_union)
+            union_hints=self.hints_union
+        )
         v.visit(ast)
         self._cleanup()
+        return v.reflected
 
     def _extract_types(self, dot_h_path: str) -> str:
         with open(dot_h_path, 'r') as f:

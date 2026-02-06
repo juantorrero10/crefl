@@ -17,4 +17,5 @@ if __name__ == "__main__":
     if len(header_files) == 0:
         print("No input header files given.", file=sys.stderr)
     gen = generator.CReflEngine(header_files)
-    gen.generate(output)
+    result = gen.generate(output)
+    print(result)
