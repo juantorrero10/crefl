@@ -66,7 +66,6 @@ typedef enum
     // Runtime hash tables
     CREFL_SECTION_HASHTABLES
 } CREFL_Section_kind;
-
 // Right after
 
 typedef struct CREFL_PACKED 

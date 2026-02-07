@@ -5,6 +5,7 @@ import re
 import subprocess as sb
 import hashlib
 import shutil
+import struct
 
 TEMP_WD = "__temp__crefl"
 BIG_H = "__reflected_types.h"
@@ -37,7 +38,6 @@ class CReflEngine:
         shutil.rmtree(TEMP_WD)
         
     def _parse_header(self, dot_h_path: str):
-        print(f"Tried to parse: {dot_h_path}")
         ast = pc.parse_file(dot_h_path)
         v = parser.ReflVisitor( 
             dot_h_path,
@@ -100,6 +100,7 @@ class CReflEngine:
 
         if self.checksum == new_checksum:
             # Checksum matches, nothing to be done
+            self._cleanup()
             return None, None
 
         try:

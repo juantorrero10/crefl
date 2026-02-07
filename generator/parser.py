@@ -21,6 +21,18 @@ PRIMITIVE_MAP = {
     'void': 'P_U0'
 }
 
+KIND_VALUES = {
+    'K_PRIMITIVE':0,
+    'K_STRING': 1,
+    'K_POINTER': 2,
+    'K_STRUCT': 3,
+    'K_UNION': 4,
+    'K_ENUM': 5,
+    'K_DYN_ARRAY': 6,
+    'K_FIXED_ARRAY': 7,
+    'K_OPTION': 8,
+}
+
 PRIMITIVE_VALUES = {
     'P_U8': 0, 'P_I8': 1, 'P_U16': 2, 'P_I16': 3,
     'P_U32': 4, 'P_I32': 5, 'P_U64': 6, 'P_I64': 7,

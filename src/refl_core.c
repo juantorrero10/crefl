@@ -1,8 +1,10 @@
 #include <public/core.h>
+#include <fetched.h>
 
 refl_st_hashmap_t G_REFL_STRUCTS = { 0 };
 refl_un_hashmap_t G_REFL_UNIONS = { 0 };
 refl_en_hashmap_t G_REFL_ENUMS = { 0 };
+refl_fi_array_t G_REFL_FIELDS = { 0 };
 char* G_STRING_POOL = NULL;
 
 
