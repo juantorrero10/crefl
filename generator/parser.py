@@ -17,13 +17,14 @@ PRIMITIVE_MAP = {
     'ssize_t': 'P_I64',
     'float': 'P_F32',
     'double': 'P_F64',
-    'bool': 'P_BOOL', '_Bool': 'P_BOOL'
+    'bool': 'P_BOOL', '_Bool': 'P_BOOL',
+    'void': 'P_U0'
 }
 
 PRIMITIVE_VALUES = {
     'P_U8': 0, 'P_I8': 1, 'P_U16': 2, 'P_I16': 3,
     'P_U32': 4, 'P_I32': 5, 'P_U64': 6, 'P_I64': 7,
-    'P_F32': 8, 'P_F64': 9, 'P_BOOL': 10
+    'P_F32': 8, 'P_F64': 9, 'P_BOOL': 10, 'P_U0': 11
 }
 
 REFL_CUSTOM = {
@@ -32,6 +33,7 @@ REFL_CUSTOM = {
 }
 
 class SubtypeKind(Enum):
+    NONE:       int = -1
     PRIM_TYPE:  int = 0,
     SUBFIELD:   int = 1,
     ENUM:       int = 2,
@@ -72,11 +74,17 @@ class ReflVisitor(c_ast.NodeVisitor):
         self.hstructs = struct_hints
         self.hunions = union_hints
         self.doth = dot_h_path
+        # Result of the operation
         self.reflected = {
             "Enums": [],
             "Structs": [],
             "Unions": []
         }
+
+        # Temp lookup dicts
+        self.r_enums = {}
+        self.r_structs = {}
+        self.r_unions = {}
 
     
 
@@ -85,16 +93,18 @@ class ReflVisitor(c_ast.NodeVisitor):
         
 
         if typename in self.henums or typename in self.hstructs or typename in self.hunions:
-            # print(f"\n[FOUND REFLECTED TYPE]: {typename}")
-
             target = node.type  # type can be Struct, Union, Enum, IdentifierType
 
             if isinstance(target, c_ast.Struct):
                 if target.decls:  # may be None for empty structs/unions
                     self.reflected["Structs"].append(self._process_struct(typename, target))
+            if isinstance(target, c_ast.Union):
+                if target.decls:  # may be None for empty structs/unions
+                    self.reflected["Unions"].append(self._process_struct(typename, target, union=True))
+
 
             elif isinstance(target, c_ast.Enum):
-                # self.reflected["Enums"].append(self._process_enum(typename, target))
+                self.reflected["Enums"].append(self._process_enum(typename, target))
                 # for item in target.values.enumerators:
                 #    print(f"  Enum Constant: {item.name}")
                 ...
@@ -128,8 +138,8 @@ class ReflVisitor(c_ast.NodeVisitor):
                 current_value += 1
 
             enum["indexes"].append(current_value)
-
-        return 
+        self.r_enums[typename] = enum
+        return enum
     
     """
     typedef struct _CREFL_FIELD_{
@@ -146,7 +156,7 @@ class ReflVisitor(c_ast.NodeVisitor):
         } subtype;
     } RField;
     """
-    def _process_field(self, name: str, offset: int, decl_type, parent_struct: str) -> dict[str: any]:
+    def _process_field(self, name: str, offset: int, decl_type, parent_struct: str, is_struct: bool) -> dict[str: any]:
         field = {
             "name": name,
             "offset": offset,
@@ -155,7 +165,32 @@ class ReflVisitor(c_ast.NodeVisitor):
             "subtype": {}
         }
 
+        pull_from = self.hstructs if is_struct else self.hunions
+
         base_type = self._get_base_type(decl_type)
+
+        # Raw pointers and strings
+        if isinstance(decl_type, c_ast.PtrDecl):
+            subtype = {}
+            if (base_type == 'char') and not isinstance(decl_type.type, c_ast.PtrDecl):
+                field["kind"] = "K_STRING"
+            else:
+                field["kind"] = "K_POINTER"
+
+                pointee_field = self._process_field(
+                    name=f"{name[:-1]}",
+                    offset=0,
+                    decl_type=decl_type.type,
+                    parent_struct=parent_struct, 
+                    is_struct=is_struct
+                )
+                subtype = {
+                    "kind": SubtypeKind.SUBFIELD,
+                    "data": pointee_field
+                }
+
+            field["subtype"] = subtype
+            return field
 
         # PRIMITIVES
         if base_type in PRIMITIVE_MAP:
@@ -166,89 +201,99 @@ class ReflVisitor(c_ast.NodeVisitor):
                     "data": prim
                 }
                 return field
+    
         
         #Option<T> / DynArray<T>
         if base_type in REFL_CUSTOM:
             field["kind"] = REFL_CUSTOM[base_type]
-
-            # Resolve contained type from hints
             try:
-                contained_type = self.hstructs[parent_struct][name]
+                contained = pull_from[parent_struct][name]
             except KeyError:
                 raise RuntimeError(
-                    f"Missing generic hint for {parent_struct}.{name}"
-                )
-
-            # Recurse into contained type
-            subfield = self._process_field(
-                name=f"{name}_value",
-                offset=0,
-                decl_type=c_ast.IdentifierType([contained_type]),
-                parent_struct=parent_struct
+                f"Couldn't find macro hint for {parent_struct}::{name}"
             )
 
+            sub = self._process_field(
+                name, 0,
+                self._str_type_to_decl(contained),
+                parent_struct,
+                is_struct
+            )
             field["subtype"] = {
                 "kind": SubtypeKind.SUBFIELD,
-                "data": subfield
+                "data": sub
             }
-            return
-        
+            return field
 
-        # Structs, they need the REFLECT(...) too
+        decl_name = decl_type.declname
+
+        # Composits -> advance one lever deeper
+        decl_type = decl_type.type
+
+        # This is a typedef'd nested field -> check if its marked as REFLECT(...)
+        if isinstance(decl_type, c_ast.IdentifierType):
+
+            if base_type in self.r_structs:
+                field["kind"] = "K_STRUCT"
+                field["subtype"] = {
+                    "kind": SubtypeKind.STRUCT,
+                    "data": self.r_structs[base_type],  # ← pointer
+                }
+                return field
+
+            if base_type in self.r_unions:
+                field["kind"] = "K_UNION"
+                field["subtype"] = {
+                    "kind": SubtypeKind.UNION,
+                    "data": self.r_unions[base_type],
+                }
+                return field
+
+            if base_type in self.r_enums:
+                field["kind"] = "K_ENUM"
+                field["subtype"] = {
+                    "kind": SubtypeKind.ENUM,
+                    "data": self.r_enums[base_type],
+                }
+                return field
+
+            raise RuntimeError(
+                f"Unallowed type: {base_type}, at {parent_struct}::{decl_name}"
+            )
+
+
+            
+        # Normal nested composite fields
+        # Structs
         if isinstance(decl_type, c_ast.Struct):
+            if decl_type.name is None: self._err_annon_nested(parent_struct, decl_name)
             field["kind"] = "K_STRUCT"
-            if decl_type.name not in self.hstructs:
-                raise RecursionError(
-                    f"Nested struct: f{decl_type} in type: '{parent_struct}' was not marked with 'REFLECT(...)'"
-                )
             field["subtype"] = {
                 "kind": SubtypeKind.STRUCT,
-                "data": decl_type.name
+                "data": self._process_struct("struct " + decl_type.name, decl_type),
             }
             return field
         
-        # Unions, also reflected
-        if isinstance(decl_type, c_ast.Struct):
-            field["kind"] = "K_STRUCT"
-            if decl_type.name not in self.hunions:
-                raise RecursionError(
-                    f"Nested union: f{decl_type} in type: '{parent_struct}' was not marked with 'REFLECT(...)'"
-                )
+        # Unions
+        if isinstance(decl_type, c_ast.Union):
+            if decl_type.name is None: self._err_annon_nested(parent_struct, decl_name)
+            field["kind"] = "K_UNION"
             field["subtype"] = {
                 "kind": SubtypeKind.UNION,
-                "data": decl_type.name
+                "data": self._process_struct("union " + decl_type.name, decl_type, union=True),
             }
             return field
-        # Enums, also reflected
-        if isinstance(decl_type, c_ast.Struct):
-            field["kind"] = "K_STRUCT"
-            if decl_type.name not in self.henums:
-                raise RecursionError(
-                    f"Nested enum: f{decl_type} in type: '{parent_struct}' was not marked with 'REFLECT(...)'"
-                )
+        
+        # Enums
+        if isinstance(decl_type, c_ast.Enum):
+            if decl_type.name is None: self._err_annon_nested(parent_struct, decl_name)
+            field["kind"] = "K_ENUM"
             field["subtype"] = {
                 "kind": SubtypeKind.ENUM,
-                "data": decl_type.name
+                "data": self._process_enum("enum " + decl_type.name, decl_type),
             }
             return field
-
-        # Raw pointers and strings
-        if isinstance(decl_type, c_ast.PtrDecl):
-            if base_type.endswith('char'):
-                field["kind"] = "K_STRING"
-            else:
-                field["kind"] = "K_POINTER"
-
-                pointee_field = self._process_field(
-                    name=f"{name[:-1]}",
-                    offset=0,
-                    decl_type=decl_type.type,
-                    parent_struct=parent_struct
-                )
-
-                field["subtype"] = pointee_field
-                return field
-            
+        
         # Fixed-Sixed Arrays
         if isinstance(decl_type, c_ast.ArrayDecl):
             field["kind"] = "K_FIXED_ARRAY"
@@ -257,7 +302,8 @@ class ReflVisitor(c_ast.NodeVisitor):
                     name=f"{name[:-1]}",
                     offset=0,
                     decl_type=decl_type.type,
-                    parent_struct=parent_struct
+                    parent_struct=parent_struct,
+                    is_struct=is_struct
                 )
             return field
 
@@ -271,9 +317,7 @@ class ReflVisitor(c_ast.NodeVisitor):
     size_t n_elements;
     } RStruct, RUnion;
     """
-    def _process_struct(self, typename: str, node: c_ast.Struct) -> dict[str, any]:
-
-        print(f"Processing type: {typename}")
+    def _process_struct(self, typename: str, node: c_ast.Struct, union=False) -> dict[str, any]:
         struct = {
             "typename": typename,
             "fields": [],
@@ -281,24 +325,49 @@ class ReflVisitor(c_ast.NodeVisitor):
         }
 
         # extract offsets first
-        field_names = []
-        for field in node.decls:
-            field_names.append(field.name)
+        if not union:
+            field_names = []
+            for field in node.decls:
+                field_names.append(field.name)
 
-        offsets = prober.get_offsets_of_type(self.doth, typename, field_names)
-        print(offsets)
+            offsets = prober.get_offsets_of_type(self.doth, typename, field_names)
 
         for idx, field in enumerate(node.decls):
+            off = 0
+            if not union: off = offsets[idx]
             field_res = self._process_field(
-                field.name, offsets[idx], field.type.type, typename)
+                field.name, off, field.type, typename, not union)
 
             struct["fields"].append(field_res)
             struct["n_elements"] += 1
 
             
-        self.reflected["Structs"].append(struct)
+        if not union: 
+            self.r_structs[typename] = struct
+        else: 
+            self.r_unions[typename] = struct
+        return struct
 
-        print(struct)
+    def _resolve_composite_type(self, decl, parent_struct, field_name):
+        """
+        Returns (kind, type_name)
+        """
+        if isinstance(decl, c_ast.Struct):
+            kind = "K_STRUCT"
+        elif isinstance(decl, c_ast.Union):
+            kind = "K_UNION"
+        elif isinstance(decl, c_ast.Enum):
+            kind = "K_ENUM"
+        else:
+            return None, None
+
+        # Priority 1: explicit name
+        if decl.name:
+            return kind, decl.name
+
+        # Priority 2: anonymous → synthesize a stable name
+        anon_name = f"{parent_struct}__{field_name}"
+        return kind, anon_name
     
     def _const_to_int(self, c: c_ast.Constant) -> int:
         assert c.type == "int"
@@ -316,15 +385,43 @@ class ReflVisitor(c_ast.NodeVisitor):
         # Decimal
         return int(text, 10)
     
-    def _get_base_type(self, decl) -> str | None:
-        if (isinstance(decl, c_ast.TypeDecl) 
-            or isinstance(decl, c_ast.PtrDecl)
-            or isinstance(decl, c_ast.ArrayDecl)):
-            return decl.type
-        elif isinstance(decl, c_ast.IdentifierType):
-            return " ".join(decl.names)
 
-        return None
+    def _str_type_to_decl(self, type_str: str) -> c_ast.IdentifierType:
+        type_str = type_str.strip()
+
+        # pointer
+        if type_str.endswith("*"):
+            inner = type_str[:-1].strip()
+            return c_ast.PtrDecl(
+                quals=[],
+                type=self._str_type_to_decl(inner)
+            )
+
+        # const qualifier (ignore for now)
+        if type_str.startswith("const "):
+            return self._str_type_to_decl(type_str[6:])
+
+        # base identifier
+        return c_ast.IdentifierType([type_str])
+
+    def _is_pointer(self, decl):
+        while isinstance(decl, (c_ast.TypeDecl, c_ast.ArrayDecl)):
+            decl = decl.type
+        return isinstance(decl, c_ast.PtrDecl)
+
+
+    def _get_base_type(self, decl) -> str | None:
+        while True:
+            if isinstance(decl, (c_ast.TypeDecl, c_ast.ArrayDecl, c_ast.PtrDecl)):
+                decl = decl.type
+            elif isinstance(decl, c_ast.IdentifierType):
+                return " ".join(decl.names)
+            else:
+                return None
+            
+    def _err_annon_nested(self, parent_struct, fieldname):
+        raise NameError(f"Annonymous struct/enums/unions are not allowed -> {parent_struct}::{fieldname}, give it a name")
+
 
 
         

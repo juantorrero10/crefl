@@ -2,13 +2,17 @@
 #define TYPE_H_
 
 
-#include <refl_types.h>
+#include <crefl/types.h>
 
 REFLECT(struct) {
     uint32_t id;
     OPTION(const char*) username;
-    inner_type some;
-    DYN_ARRAY(int) indices;
+    struct name
+    {
+        uint32_t a;
+        uint32_t b;
+    } some;
+    DYN_ARRAY(uint32_t) indices;
     uint8_t final;
     void* wrongly_ptr;
 } data;
@@ -46,19 +50,20 @@ REFLECT(union)
 {
     uint64_t a;
     bool b;
+    result_t res;
     OPTION(const char*) string;
 } some_union;
 
 
 REFLECT(struct) {
-    int id;
+    uint32_t id;
     const char* name;
 } superior;
 
 
 REFLECT(struct) {
-    int id;
-    OPTION(int) id_superior;
+    int32_t id;
+    OPTION(int32_t) id_superior;
     const char* name;
 } user_t;
 

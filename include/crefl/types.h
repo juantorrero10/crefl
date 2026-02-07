@@ -23,19 +23,20 @@ typedef enum {
     P_U32, P_I32,
     P_U64, P_I64,
     P_F32, P_F64,
-    P_BOOL
+    P_BOOL,
+    P_U0  // aka. void
 } KPrimitive;
 
 typedef struct _CREFL_FIELD_ RField;
 
 typedef struct {
-    const char* typename;
+    const char* name_type;
     RField* fields;
     size_t n_elements;
 } RStruct, RUnion;
 
 typedef struct { 
-    const char* typename;
+    const char* name_type;
     const char** names;
     size_t* indexes;
     size_t n_elements;

@@ -1,6 +1,8 @@
-#include <refl.h>
+#include <crefl/core.h>
 
 refl_st_hashmap_t G_REFL_STRUCTS = { 0 };
+refl_st_hashmap_t G_REFL_UNIONS = { 0 };
+refl_st_hashmap_t G_REFL_ENUMS = { 0 };
 REnum* G_REFL_ENUMS = NULL;
 size_t G_REFL_ENUMS_AMOUNT = 0;
 char* G_STRING_POOL = NULL;
