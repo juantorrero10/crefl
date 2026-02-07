@@ -381,7 +381,8 @@ class CreflWriter:
         for i, table in enumerate(tables):
             entries = bytearray()
             for name, in_file_id in tables[i].items():
-                hashed_idx = fnv1a(name) % counts[i] * 2 # Avoid collitions on small lists 
+                hashed_idx = fnv1a(name) % counts[i] * 2 # Avoid collitions on small lists
+                print(f"{in_file_id}:{hashed_idx}")
                 entries += struct.pack(
                     "<I I",
                     in_file_id,

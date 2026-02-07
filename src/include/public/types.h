@@ -4,8 +4,11 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define REFLECT(type) typedef type
+#define OPTION(type) r_option_t
+#define DYN_ARRAY(type) r_array_t 
 
-typedef enum {
+REFLECT(enum) {
     K_PRIMITIVE,
     K_STRING,
     K_POINTER,
@@ -17,7 +20,7 @@ typedef enum {
     K_OPTION
 } RKind;
 
-typedef enum {
+REFLECT(enum) {
     P_U8,  P_I8,
     P_U16, P_I16,
     P_U32, P_I32,
@@ -25,7 +28,7 @@ typedef enum {
     P_F32, P_F64,
     P_BOOL,
     P_U0  // aka. void
-} KPrimitive;
+} RPrimitive;
 
 typedef struct _CREFL_FIELD_ RField;
 
@@ -48,7 +51,7 @@ typedef struct _CREFL_FIELD_{
     size_t size;          // For dyn arrays, always 1 for other kinds 
     RKind kind;
     union {
-        KPrimitive prim;
+        RPrimitive prim;
         RField* subfield; // For pointer, option, fixed and dyn arrays
         REnum* e;
         RStruct* s;
@@ -63,23 +66,17 @@ typedef void* RObject;
 // These will be generated into K_OPTION and K_DYN_ARRAY
 typedef struct _CREFL_OPTION_ {
     enum { SOME, NONE } opt;
-    void* data;
+    void* optional;
     size_t size;
 } r_option_t;
 
 typedef struct _CREFL_DYN_ARRAY {
-    void* data;
+    void* array;
     size_t size;
     size_t capacity;
     size_t chunk_size;
 } r_array_t;
 
-
-
-
-#define REFLECT(type) typedef type
-#define OPTION(type) r_option_t
-#define DYN_ARRAY(type) r_array_t 
 
 REFLECT(struct) {
     uint64_t data;

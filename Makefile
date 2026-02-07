@@ -5,7 +5,11 @@ CFLAGS = -Wall -Wextra -Werror -std=c17 -Isrc/include -g -m64 -MMD -MP
 SRC_DIR = src
 DEMO_DIR = demo
 OBJ_DIR = build/obj
-BIN_DIR = build/bin
+BIN_DIR = build/
+
+CRELF_FILE = generated_types.crefl
+PY_GEN    = python3 generator/main.py
+PY_INPUT  = $(shell find src -name "*.h")
 
 # --- Source Discovery ---
 # This looks for ALL .c files in your src directory automatically.
@@ -27,17 +31,16 @@ $(BIN): $(OBJ) | $(BIN_DIR)
 	@echo "Linking -> $@"
 	$(CC) $(CFLAGS) -o $@ $(OBJ)
 
+$(CRELF_FILE): $(PY_INPUT)
+	@mkdir -p $(dir $@)
+	@echo "Generating reflection -> $@"
+	$(PY_GEN) -i $(PY_INPUT) -o $@
+
 # Rule for C files
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(CRELF_FILE)
 	@mkdir -p $(dir $@)
 	@echo "Compiling -> $<"
-	$(CC) $(CFLAGS) -c $< -o $@
-
-# Rule for ASM files
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.asm
-	@mkdir -p $(dir $@)
-	@echo "Assembling -> $<"
-	nasm -f elf64 $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@ -DCREFL_FILE=\"$(CRELF_FILE)\"
 
 -include $(DEPS)
 

@@ -44,6 +44,11 @@ REFL_CUSTOM = {
     'r_array_t': 'K_DYN_ARRAY'
 }
 
+REFL_CUSTOM_INNER_NAME = {
+    'K_OPTION': 'optional',
+    'K_DYN_ARRAY': 'array'
+}
+
 class SubtypeKind(Enum):
     NONE:       int = -1
     PRIM_TYPE:  int = 0,
@@ -190,7 +195,7 @@ class ReflVisitor(c_ast.NodeVisitor):
                 field["kind"] = "K_POINTER"
 
                 pointee_field = self._process_field(
-                    name=f"{name[:-1]}",
+                    name=f"{name}_pointee",
                     offset=0,
                     decl_type=decl_type.type,
                     parent_struct=parent_struct, 
@@ -226,7 +231,7 @@ class ReflVisitor(c_ast.NodeVisitor):
             )
 
             sub = self._process_field(
-                name, 0,
+                REFL_CUSTOM_INNER_NAME[REFL_CUSTOM[base_type]], 0,
                 self._str_type_to_decl(contained),
                 parent_struct,
                 is_struct

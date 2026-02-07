@@ -18,6 +18,13 @@ REFLECT(enum) {
 
 
 int main() {
-    refl_engine_load("generated_types.crefl");
+    refl_engine_load(CREFL_FILE);
+
+    REnum* en = refl_fetch_enum("chan_err_t");
+    for (size_t i = 0; i < en->n_elements; i++)
+    {
+        printf("> %s\n", en->names[i]);
+    }
+    
     return 0;
 }

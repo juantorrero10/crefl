@@ -48,5 +48,6 @@ extern refl_st_hashmap_t G_REFL_STRUCTS;
 extern refl_en_hashmap_t G_REFL_ENUMS;
 extern refl_un_hashmap_t G_REFL_UNIONS;
 extern refl_fi_array_t G_REFL_FIELDS;
+extern char* G_STRING_POOL;
 
 #endif // FETCHED_H_

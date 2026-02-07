@@ -16,8 +16,8 @@
 #endif
 
 
-#define DEREF(type, new_var, origin, offset) type* new_var = (type*)((uint8_t*)origin + offset)
-
+#define DEREF_NEW(type, new_var, origin, offset) type* new_var = (type*)((uint8_t*)origin + offset)
+#define DEREF(type, new_var, origin, offset) new_var = (type*)((uint8_t*)origin + offset)
 #define CREFL_MAGIC 0x435245464C583634
 
 
@@ -60,8 +60,8 @@ typedef enum
     CREFL_SECTION_UNIONS,
 
     // General purpose
-    CREFL_SECTION_INDEX_TABLE,
     CREFL_SECTION_STRING_POOL,
+    CREFL_SECTION_INDEX_TABLE,
 
     // Runtime hash tables
     CREFL_SECTION_HASHTABLES

@@ -8,13 +8,29 @@
 #include <errno.h>
 
 #include <public/types.h>
+#include <fetched.h>
 #include <dot_crefl.h>
+#include <public/core.h>
 
+CREFL_Section_table* sections_tables = NULL;
+CREFL_Header* base_ptr = NULL;
+CREFL_Field* field_section = NULL;
+CREFL_Enum* enum_section = NULL;
+uint32_t* index_table = NULL;
+
+size_t NUM_SECTIONS;
+
+static void cleanup();
 
 static void print_header(void* mem, size_t sz) {
-    DEREF(CREFL_Header, header, mem, 0);
+    DEREF_NEW(CREFL_Header, header, mem, 0);
     if (header->endianness) {
-        printf("This refl version doesn't support big-endian.\n");
+        fprintf(stderr, "This refl version doesn't support big-endian.\n");
+        munmap(mem, sz);
+        exit(EXIT_FAILURE);
+    }
+    else if (__builtin_bswap64(header->magic) != CREFL_MAGIC) {
+        fprintf(stderr, "File given is not .CREFL file\n");
         munmap(mem, sz);
         exit(EXIT_FAILURE);
     }
@@ -26,8 +42,124 @@ static void print_header(void* mem, size_t sz) {
     printf("FLAGS: %hu\n", header->flags);
     printf("CHECK_SUM: 0x%lx%lx\n", *(uint64_t*)header->checksum + 8, *(uint64_t*)header->checksum);
     printf("N_SECTIONS: %u\n", header->n_sections);
+
+    NUM_SECTIONS = header->n_sections;
 }
 
+static inline void set_string(CREFL_String* desc, char** dst) {
+    *dst = G_STRING_POOL + desc->offset;
+}
+
+void populate_fields() {
+    G_REFL_FIELDS.fields = malloc(sizeof(RField) * sections_tables[CREFL_SECTION_FIELDS].n_elements);
+    G_REFL_FIELDS.count = sections_tables[CREFL_SECTION_FIELDS].n_elements;
+    for (size_t i = 0; i < sections_tables[CREFL_SECTION_FIELDS].n_elements; i++)
+    {
+        RField* curr = &G_REFL_FIELDS.fields[i];
+        CREFL_Field* ady = &field_section[i];
+        *curr = (RField){ 0 };
+        set_string(&ady->name, (char**)&curr->name);
+        curr->kind = (RKind)ady->kind;
+        curr->size = ady->array_size;
+        curr->offset = ady->offset;
+        switch (curr->kind)
+        {
+            case K_DYN_ARRAY:
+            case K_OPTION:
+            case K_POINTER:
+            case K_FIXED_ARRAY:
+                curr->subtype.subfield = &G_REFL_FIELDS.fields[ady->subtype_data];
+                break;
+
+            case K_ENUM:
+            case K_STRUCT:
+            case K_UNION:
+                curr->subtype.s = NULL;
+                break;
+            case K_PRIMITIVE:
+                curr->subtype.prim = (RPrimitive)ady->subtype_data;
+                break;
+            default:
+                curr->subtype.s = NULL;
+        }
+    }
+    
+}
+
+void print_field(RField* f, int indent) {
+    const char* tabs = "\t\t\t\t\t\t\t\t\t\t\t\t";
+    REnum* kind = refl_fetch_enum("RKind");
+
+    if (indent == 0) printf("--------------------\n");
+    printf("%.*sName: %s\n",    indent, tabs,   f->name);
+    printf("%.*sOffset: %zu\n", indent, tabs,   f->offset);
+    printf("%.*sKind: %s\n",    indent, tabs,   refl_enum_strname(kind, f->kind));
+    printf("%.*sSize: %zu\n",   indent, tabs,   f->size);
+    if (f->kind == K_PRIMITIVE) {
+        REnum* prim = refl_fetch_enum("RPrimitive");
+        printf("%.*sPrimitive type: %s\n", indent, tabs, refl_enum_strname(prim, f->subtype.prim));
+    } else if ((int)f->kind == 2 || (int)f->kind >= 6) {
+        print_field(f->subtype.subfield, indent + 1);
+    }
+}
+
+static inline void print_fields(RField* f, size_t sz) {
+    for (size_t i = 0; i < sz; i++)
+    {
+        print_field(&f[i], 0);
+    }
+}
+
+
+
+
+static void populate_enums() {
+    size_t n_enums = sections_tables[CREFL_SECTION_ENUMS].n_elements; 
+    if (n_enums == 0) return;
+    G_REFL_ENUMS.map = calloc(sizeof(refl_en_entry_t), 2 * n_enums);
+    G_REFL_ENUMS.count = 2 * n_enums;
+    DEREF_NEW(CREFL_Hashtable_Header, enum_ht_header, base_ptr, sections_tables[CREFL_SECTION_HASHTABLES].start);
+    size_t n_hash_entries = enum_ht_header->n_elements;
+    CREFL_Hashtable_Entry* enum_hashtable = (CREFL_Hashtable_Entry*)(enum_ht_header + 1);
+    for (size_t i = 0; i < n_hash_entries; i++)
+    {
+        uint32_t file_idx = enum_hashtable[i].element_id;
+        uint32_t new_idx  = enum_hashtable[i].hashed_index;
+        CREFL_Enum* ady = enum_section + file_idx;
+        refl_en_entry_t* entry = &G_REFL_ENUMS.map[new_idx];
+        
+        if (entry->k_name != NULL) {
+            // Collision!!!, linearly find next empty spot
+            do  {
+                new_idx = (new_idx + 1) % (2 * n_enums);
+                entry = &G_REFL_ENUMS.map[new_idx];
+            } while(entry->k_name != NULL);
+        }
+        
+        // Free spot by this point
+        REnum* curr = &entry->val;
+        set_string(&ady->type_name, (char**)&entry->k_name);
+        set_string(&ady->type_name, (char**)&curr->name_type);
+
+        printf("!![%u]: %s\n",new_idx, entry->k_name);
+        
+        // Set the names
+        curr->n_elements = ady->n_elements;
+        curr->names = calloc(sizeof(char*), ady->n_elements);
+
+        CREFL_String* str_refs = (CREFL_String*)(index_table + ady->names);   
+        for (size_t i = 0; i < ady->n_elements; i++)
+        {
+            curr->names[i] = G_STRING_POOL + str_refs[i].offset;
+        }
+
+        curr->indexes = calloc(sizeof(size_t), ady->n_elements);
+        uint32_t* file_indexes = (uint32_t*)(index_table + ady->indexes);
+        for (size_t i = 0; i < ady->n_elements; i++) {
+            curr->indexes[i] = (size_t)file_indexes[i];
+        }
+    }
+}
 
 
 void refl_engine_load(const char* file_path) {
@@ -43,6 +175,37 @@ void refl_engine_load(const char* file_path) {
 
 
     void* mapped = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
-    print_header(mapped, size);
+
+    (void)print_header;
+    //print_header(mapped, size);
+    DEREF(CREFL_Header, base_ptr, mapped, 0);
+    DEREF(CREFL_Section_table, sections_tables, mapped, sizeof(CREFL_Header));
+    DEREF(CREFL_Field, field_section, mapped, sections_tables[CREFL_SECTION_FIELDS].start);
+    DEREF(CREFL_Enum, enum_section, mapped, sections_tables[CREFL_SECTION_ENUMS].start);
+    DEREF(uint32_t, index_table, mapped, sections_tables[CREFL_SECTION_INDEX_TABLE].start);
+
+    size_t sp_size = sections_tables[CREFL_SECTION_STRING_POOL].n_elements;
+    G_STRING_POOL = malloc(sp_size);
+
+    memcpy(G_STRING_POOL, (uint8_t*)mapped + (sections_tables[CREFL_SECTION_STRING_POOL].start), sp_size);
+    populate_enums();
+
+    populate_fields();
+    //print_fields(G_REFL_FIELDS.fields, G_REFL_FIELDS.count);
+
+
     munmap(mapped, size);
+    atexit(cleanup);
+}
+
+
+static void cleanup() {
+    free(G_STRING_POOL);
+    free(G_REFL_FIELDS.fields);
+    for (size_t i = 0; i < G_REFL_ENUMS.count; i++)
+    {
+        free(G_REFL_ENUMS.map[i].val.names);
+        free(G_REFL_ENUMS.map[i].val.indexes);
+    }
+    free(G_REFL_ENUMS.map);
 }

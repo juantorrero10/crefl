@@ -44,6 +44,7 @@ REFLECT(union)
 REFLECT(struct) {
     uint32_t id;
     const char* name;
+    uint8_t** fuck;
 } superior;
 
 
