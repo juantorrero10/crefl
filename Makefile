@@ -1,8 +1,9 @@
 TARGET = crefl_demo
 CC = gcc
-CFLAGS = -Wall -Wextra -Werror -std=c17 -Iinclude -g -m64 -MMD -MP
+CFLAGS = -Wall -Wextra -Werror -std=c17 -Isrc/include -g -m64 -MMD -MP
 
 SRC_DIR = src
+DEMO_DIR = demo
 OBJ_DIR = build/obj
 BIN_DIR = build/bin
 

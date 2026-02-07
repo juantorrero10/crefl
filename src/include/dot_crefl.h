@@ -16,14 +16,16 @@
 #endif
 
 
+#define DEREF(type, new_var, origin, offset) type* new_var = (type*)((uint8_t*)origin + offset)
 
 #define CREFL_MAGIC 0x435245464C583634
 
 
+// All strings store in string pool are null terminated
 typedef struct CREFL_PACKED 
 {
     uint32_t offset;            // From start of string pool
-    uint32_t size;              // String size no NULL term.
+    uint32_t size;              // Not accounting NULL term
 } CREFL_String;
 
 /**
@@ -41,12 +43,29 @@ typedef uint32_t index_table_offset;
 
 typedef struct CREFL_PACKED
 {
-    uint64_t magic;             // "CREFLX64"
-    uint16_t version;           // 00 00
-    uint16_t flags;             // Maybe useful in the future
-    uint32_t n_sections;        // 4
-    uint32_t string_pool_size;
+    uint64_t    magic;             // "CREFLX64"
+    uint8_t     endianness;        // 00 little endian, 01 big endian
+    uint16_t    version;           // 00 00
+    uint16_t    flags;             // Maybe useful in the future
+    uint8_t     checksum[16];
+    uint32_t    n_sections;        // 7
 } CREFL_Header;
+
+typedef enum 
+{
+    // Arrays, one element next to eachother
+    CREFL_SECTION_FIELDS,
+    CREFL_SECTION_ENUMS,
+    CREFL_SECTION_STRUCTS,
+    CREFL_SECTION_UNIONS,
+
+    // General purpose
+    CREFL_SECTION_INDEX_TABLE,
+    CREFL_SECTION_STRING_POOL,
+
+    // Runtime hash tables
+    CREFL_SECTION_HASHTABLES
+} CREFL_Section_kind;
 
 // Right after
 
@@ -95,19 +114,16 @@ typedef struct CREFL_PACKED {
     uint32_t n_elements;
 } CREFL_Enum;
 
+typedef struct CREFL_PACKED {
+    uint32_t n_elements;           
+    uint32_t next_hash_table_offset;  // From start of section
+} CREFL_Hashtable_Header;
 
-
-typedef enum 
+typedef struct CREFL_PACKED
 {
-    CREFL_SECTION_FIELDS,
-    CREFL_SECTION_ENUMS,
-    CREFL_SECTION_STRUCTS,
-    CREFL_SECTION_UNIONS,
-    CREFL_SECTION_INDEX_TABLE,
-    CREFL_SECTION_STRING_POOL,
-    CREFL_SECTION_HASHTABLES
-} CREFL_Section_kind;
-
+    uint32_t element_id;
+    uint32_t hashed_index;
+} CREFL_Hashtable_Entry;
 
 
 

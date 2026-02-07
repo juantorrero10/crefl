@@ -3,18 +3,21 @@ import os
 import pycparser as pc
 import re
 import subprocess as sb
+import hashlib
 import shutil
 
 TEMP_WD = "__temp__crefl"
 BIG_H = "__reflected_types.h"
+file_path = os.path.abspath(os.path.dirname(__file__))
 
 
 class CReflEngine:
-    def __init__(self, headers: list[str]):
+    def __init__(self, headers: list[str], checksum):
         self.headers = headers
         self.hints_enum = []
         self.hints_struct = {}
         self.hints_union = {}
+        self.checksum = checksum
         
     def generate(self, output_file: str):
         for header in self.headers:
@@ -25,8 +28,9 @@ class CReflEngine:
             self.hints_struct.update(structs)
             self.hints_union.update(unions)
 
-        out_h = self._expand_headers()
-        return self._parse_header(f"./{out_h}")
+        new_cs, out_h = self._expand_headers()
+        if out_h is None: return None, None
+        return new_cs, self._parse_header(f"./{out_h}")
 
     def _cleanup(self):
         os.chdir("..")
@@ -75,7 +79,7 @@ class CReflEngine:
         
         return clean_content
 
-    def _expand_headers(self) -> str:
+    def _expand_headers(self) -> tuple[str, str | None]:
         try:
             shutil.rmtree(TEMP_WD)
         except FileNotFoundError: ...
@@ -92,13 +96,19 @@ class CReflEngine:
         with open(BIG_H, "w") as f:
             f.write(combined)
 
+        new_checksum = hashlib.md5(combined.encode("utf-8")).digest()
+
+        if self.checksum == new_checksum:
+            # Checksum matches, nothing to be done
+            return None, None
+
         try:
             sb.run(
                 ["gcc","-E", "-P",
                     BIG_H,
                     "-nostdinc",
                     "-o", f"exp_{BIG_H}", 
-                    f"-I../inyect_headers"
+                    f"-I{file_path}/inyect_headers"
                     ], check=True)
         except sb.CalledProcessError:
             self._cleanup()
@@ -106,7 +116,7 @@ class CReflEngine:
             re.add_note("One of the input headers did not exist or couldn't be compiled")
             raise re
             
-        return f"exp_{BIG_H}"
+        return new_checksum, f"exp_{BIG_H}"
     
 
     def _extract_enum_hints(seld, dot_h_path: str) -> list[str]:

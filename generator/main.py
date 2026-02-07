@@ -1,5 +1,6 @@
 import generator
 import argparse as ap
+import writer
 import sys
 
 
@@ -16,6 +17,12 @@ if __name__ == "__main__":
     output, header_files = parse_args()
     if len(header_files) == 0:
         print("No input header files given.", file=sys.stderr)
-    gen = generator.CReflEngine(header_files)
-    result = gen.generate(output)
+        exit(1)
+    gen = generator.CReflEngine(header_files, "0")
+    cs, result = gen.generate(output)
+    if result is None:
+        print("Nothing to be done.")
+        exit(0)
     print(result)
+    fw = writer.CreflWriter(output, cs, result)
+    fw.write()
