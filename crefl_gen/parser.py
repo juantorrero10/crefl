@@ -332,13 +332,15 @@ class ReflVisitor(c_ast.NodeVisitor):
     const char* typename;
     RField* fields;
     size_t n_elements;
+    size_t total_size;
     } RStruct, RUnion;
     """
     def _process_struct(self, typename: str, node: c_ast.Struct, union=False) -> dict[str, any]:
         struct = {
             "typename": typename,
             "fields": [],
-            "n_elements": 0
+            "n_elements": 0,
+            "total_size": 0
         }
 
         # extract offsets first
@@ -347,7 +349,8 @@ class ReflVisitor(c_ast.NodeVisitor):
             for field in node.decls:
                 field_names.append(field.name)
 
-            offsets = prober.get_offsets_of_type(self.doth, typename, field_names)
+            offsets, total_size = prober.get_offsets_of_type(self.doth, typename, field_names)
+            struct["total_size"] = total_size
 
         for idx, field in enumerate(node.decls):
             off = 0

@@ -14,7 +14,7 @@ N_HASH_TABLES = int(3)
 SIZE_HEADER = 33
 SIZE_SECTION_TABLE = 20
 SIZE_FIELD = 24
-SIZE_STRUCT = 16
+SIZE_STRUCT = 20
 SIZE_ENUM = 20
 
 
@@ -124,6 +124,7 @@ class CreflWriter:
         // Storing n_elements's DWORD id's of the fields
         index_table_offset fields;
         uint32_t n_elements;
+        uint32_t total_size;
     } CREFL_Struct, CREFL_Union;
     """
     def _process_field(self, field) -> int:
@@ -188,12 +189,15 @@ class CreflWriter:
         for field in st["fields"]:
             ids.append(self._process_field(field))
 
+        total_size = st["total_size"]
+
         proc = struct.pack(
-            "<I I I I",
+            "<I I I I I",
             str_offset,
             length,
             self.curr_it_offset,              # Populated later
             n_elements,
+            int(total_size)
         )
 
         ret = 0
@@ -276,13 +280,12 @@ class CreflWriter:
         return self.n_enums - 1
 
 
-
     def _process_sections(self):
-        for st in self.data["Structs"]:
-            self._process_struct_union(st, False)
-
         for en in self.data["Enums"]:
             self._process_enum(en)
+
+        for st in self.data["Structs"]:
+            self._process_struct_union(st, False)
 
         for un in self.data["Unions"]:
             self._process_struct_union(un, True)
@@ -381,19 +384,17 @@ class CreflWriter:
         for i, table in enumerate(tables):
             entries = bytearray()
             for name, in_file_id in tables[i].items():
-                hashed_idx = fnv1a(name) % counts[i] * 2 # Avoid collitions on small lists
-                print(f"{in_file_id}:{hashed_idx}")
+                hashed_idx = fnv1a(name) % (len(tables[i]) * 2) # Avoid collitions on small lists
                 entries += struct.pack(
                     "<I I",
                     in_file_id,
                     hashed_idx
                 )
-
             if i == N_HASH_TABLES - 1: next_offset = 0
-            else: next_offset = curr_offset + size_header + (counts[i] * size_entry)
+            else: next_offset = curr_offset + size_header + (len(tables[i]) * size_entry)
             header = struct.pack(
                 "<I I",
-                counts[i],
+                len(tables[i]),
                 next_offset
             )
             curr_offset = next_offset

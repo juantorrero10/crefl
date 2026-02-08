@@ -25,19 +25,41 @@ static inline uint32_t fnv1a(const char* name, size_t sz) {
     return h;
 }
 
-
-RStruct* refl_fetch_struct(const char* name) {
-    size_t idx = fnv1a(name, strlen(name)) % G_REFL_STRUCTS.count;
-    return &G_REFL_STRUCTS.map[idx].val;
-}
-
 REnum* refl_fetch_enum(const char* name) {
+    uint32_t att_count = 0;
     uint32_t idx = fnv1a(name, strlen(name)) % G_REFL_ENUMS.count;
-    while((G_REFL_ENUMS.map[idx].k_name == NULL) 
-    || (strcmp(name, G_REFL_ENUMS.map[idx].k_name) != 0)) {
+    while(((G_REFL_ENUMS.map[idx].k_name == NULL) 
+    || (strcmp(name, G_REFL_ENUMS.map[idx].k_name) != 0)) && att_count <= G_REFL_ENUMS.count ) {
+        att_count++;
         idx = (idx + 1) % G_REFL_ENUMS.count;
     }
-    return &G_REFL_ENUMS.map[idx].val;
+    return (att_count <= G_REFL_ENUMS.count)? &G_REFL_ENUMS.map[idx].val : NULL;
+}
+
+
+RStruct* refl_fetch_struct(const char* name) {
+
+
+    uint32_t att_count = 0;
+    uint32_t idx = fnv1a(name, strlen(name)) % G_REFL_STRUCTS.count;
+    while(((G_REFL_STRUCTS.map[idx].k_name == NULL) 
+    || (strcmp(name, G_REFL_STRUCTS.map[idx].k_name) != 0)) && att_count <= G_REFL_STRUCTS.count ) {
+        att_count++;
+        idx = (idx + 1) % G_REFL_STRUCTS.count;
+    }
+    return (att_count <= G_REFL_STRUCTS.count)? &G_REFL_STRUCTS.map[idx].val : NULL;
+}
+
+
+RUnion* refl_fetch_union(const char* name) {
+    uint32_t att_count = 0;
+    uint32_t idx = fnv1a(name, strlen(name)) % G_REFL_UNIONS.count;
+    while(((G_REFL_UNIONS.map[idx].k_name == NULL) 
+    || (strcmp(name, G_REFL_UNIONS.map[idx].k_name) != 0)) && att_count <= G_REFL_UNIONS.count ) {
+        att_count++;
+        idx = (idx + 1) % G_REFL_UNIONS.count;
+    }
+    return (att_count <= G_REFL_UNIONS.count)? &G_REFL_UNIONS.map[idx].val : NULL;
 }
 
 const char* refl_enum_strname(REnum* type, uint32_t val) {
@@ -63,13 +85,34 @@ const char* refl_enum_strname(REnum* type, uint32_t val) {
     return NULL; // not found
 }
 
-
-RObject refl_fetch_from_instance(RStruct* refl_struct, size_t field_index, RObject instance) {
-    if (!refl_struct || field_index >= refl_struct->n_elements) {
-        return NULL;
+size_t refl_prim_to_size(RPrimitive p) {
+    switch (p)
+    {
+    case P_U0:
+        return 0;
+    case P_BOOL:
+        return sizeof(int);
+    case P_F32:
+    case P_I32:
+    case P_U32:
+        return 4;
+    case P_F64:
+    case P_I64:
+    case P_U64:
+        return 8;
+    case P_U16:
+    case P_I16:
+        return 2;
+    case P_U8:
+    case P_I8:
+        return 1;
+    
+    default:
+        break;
     }
-    
-    RField* field = &refl_struct->fields[field_index];
-    
-    return (uint8_t*)instance + field->offset;
+    return (size_t)-1;
+}
+
+RObject refl_get_field_value(RStruct* st, RObject instance, int idx) {
+    return *(void**)((uint8_t*)instance + st->fields[idx]->offset);
 }

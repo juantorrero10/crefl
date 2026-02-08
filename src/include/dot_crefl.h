@@ -98,6 +98,7 @@ typedef struct CREFL_PACKED
     // Storing n_elements's DWORD id's of the fields
     index_table_offset fields;
     uint32_t n_elements;
+    uint32_t total_size;
 } CREFL_Struct, CREFL_Union;
 
 typedef struct CREFL_PACKED {

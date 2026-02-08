@@ -5,11 +5,11 @@ CFLAGS = -Wall -Wextra -Werror -std=c17 -Isrc/include -g -m64 -MMD -MP
 SRC_DIR = src
 DEMO_DIR = demo
 OBJ_DIR = build/obj
-BIN_DIR = build/
+BIN_DIR = build/bin
 
 CRELF_FILE = generated_types.crefl
-PY_GEN    = python3 generator/main.py
-PY_INPUT  = $(shell find src -name "*.h")
+PY_GEN    = python3 crefl_gen/main.py
+PY_INPUT  = $(shell find src -name "*.h") $(shell find src -name "*.c")
 
 # --- Source Discovery ---
 # This looks for ALL .c files in your src directory automatically.
@@ -54,5 +54,6 @@ run: all
 
 clean:
 	rm -rf build
+	rm generated_types.crefl
 
 .PHONY: all clean run

@@ -34,8 +34,9 @@ typedef struct _CREFL_FIELD_ RField;
 
 typedef struct {
     const char* name_type;
-    RField* fields;
+    RField** fields;
     size_t n_elements;
+    size_t total_size;
 } RStruct, RUnion;
 
 typedef struct { 
