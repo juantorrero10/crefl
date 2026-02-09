@@ -1,4 +1,4 @@
 build
-generator/__pycache__
+crefl_gen/__pycache__
 generator/__temp__crefl
 .vscode

@@ -1,5 +1,8 @@
+#define _GNU_SOURCE
+
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 
 #include <public/core.h>
@@ -50,6 +53,15 @@ RStruct* refl_fetch_struct(const char* name) {
     return (att_count <= G_REFL_STRUCTS.count)? &G_REFL_STRUCTS.map[idx].val : NULL;
 }
 
+int refl_enum_has_label(REnum* e, const char* lbl) {
+    if (!lbl) return 0;
+    for (size_t i = 0; i < e->n_elements; i++)
+    {
+        if (strcmp(lbl, e->names[i]) == 0) return 1;
+    }
+    return 0;
+}
+
 
 RUnion* refl_fetch_union(const char* name) {
     uint32_t att_count = 0;
@@ -62,57 +74,29 @@ RUnion* refl_fetch_union(const char* name) {
     return (att_count <= G_REFL_UNIONS.count)? &G_REFL_UNIONS.map[idx].val : NULL;
 }
 
-const char* refl_enum_strname(REnum* type, uint32_t val) {
-    // Straight correlation
-    if (val < type->n_elements && type->indexes[val] == val) return type->names[val];
-    // Binary search
-    int32_t low = 0;
-    int32_t high = type->n_elements - 1;
 
-    while (low <= high) {
-        int32_t mid = low + (high - low) / 2;
-        uint32_t val_at = type->indexes[mid];
-
-        if (val_at == val) {
-            return type->names[mid];
-        } else if (val_at < val) {
-            low = mid + 1;
-        } else {
-            high = mid - 1;
-        }
-    }
-
-    return NULL; // not found
-}
-
-size_t refl_prim_to_size(RPrimitive p) {
-    switch (p)
+void refl_destroy_owned_enum(REnum* owned) {
+    free(owned->indexes);
+    for (size_t i = 0; i < owned->n_elements; i++)
     {
-    case P_U0:
-        return 0;
-    case P_BOOL:
-        return sizeof(int);
-    case P_F32:
-    case P_I32:
-    case P_U32:
-        return 4;
-    case P_F64:
-    case P_I64:
-    case P_U64:
-        return 8;
-    case P_U16:
-    case P_I16:
-        return 2;
-    case P_U8:
-    case P_I8:
-        return 1;
-    
-    default:
-        break;
+        free((void*)owned->names[i]);
     }
-    return (size_t)-1;
+    free(owned->names);
+    free((void*)owned->name_type);
+    free(owned);
 }
 
-RObject refl_get_field_value(RStruct* st, RObject instance, int idx) {
-    return *(void**)((uint8_t*)instance + st->fields[idx]->offset);
+
+REnum* refl_own_enum(REnum* ref) {
+    REnum* ret = malloc(sizeof(REnum));
+    ret->n_elements = ref->n_elements;
+    ret->name_type = strdup(ref->name_type);
+    ret->indexes = malloc(ret->n_elements * sizeof(size_t));
+    memcpy(ret->indexes, ref->indexes, sizeof(size_t) * ret->n_elements);
+    ret->names = malloc(sizeof(char*) * ref->n_elements);
+    for (size_t i = 0; i < ret->n_elements; i++)
+    {
+        ret->names[i] = strdup(ref->names[i]);
+    }
+    return ret;
 }

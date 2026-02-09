@@ -42,13 +42,14 @@ typedef struct {
 typedef struct { 
     const char* name_type;
     const char** names;
-    size_t* indexes;
+    int64_t* indexes;
     size_t n_elements;
 } REnum;
 
 typedef struct _CREFL_FIELD_{
     const char* name;
     size_t offset;
+    size_t next_offset;
     size_t size;          // For dyn arrays, always 1 for other kinds 
     RKind kind;
     union {
@@ -66,7 +67,7 @@ typedef void* RObject;
 // Data wrappers for defining uses cases for a pointer
 // These will be generated into K_OPTION and K_DYN_ARRAY
 typedef struct _CREFL_OPTION_ {
-    enum { SOME, NONE } opt;
+    enum opt_states { NONE, SOME } opt;
     void* optional;
     size_t size;
 } r_option_t;
@@ -77,13 +78,6 @@ typedef struct _CREFL_DYN_ARRAY {
     size_t capacity;
     size_t chunk_size;
 } r_array_t;
-
-
-REFLECT(struct) {
-    uint64_t data;
-    uint64_t another_data;
-} inner_type;
-
 
 
 #endif // REFL_TYPES_H_

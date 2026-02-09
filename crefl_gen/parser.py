@@ -135,7 +135,6 @@ class ReflVisitor(c_ast.NodeVisitor):
     } REnum;
     """
     def _process_enum(self, typename: str, node: c_ast.Enum) -> dict[str, any]:
-
         enum = {
             "typename" : typename,
             "names" : [],
@@ -162,6 +161,7 @@ class ReflVisitor(c_ast.NodeVisitor):
     typedef struct _CREFL_FIELD_{
         const char* name;
         size_t offset;
+        size_t next_offset;
         size_t size;           
         RKind kind;
         union {
@@ -173,10 +173,11 @@ class ReflVisitor(c_ast.NodeVisitor):
         } subtype;
     } RField;
     """
-    def _process_field(self, name: str, offset: int, decl_type, parent_struct: str, is_struct: bool) -> dict[str: any]:
+    def _process_field(self, name: str, offset: int, off_next: int, decl_type, parent_struct: str, is_struct: bool) -> dict[str: any]:
         field = {
             "name": name,
             "offset": offset,
+            "next_offset": off_next,
             "size": 1,
             "kind": None,
             "subtype": {}
@@ -196,7 +197,8 @@ class ReflVisitor(c_ast.NodeVisitor):
 
                 pointee_field = self._process_field(
                     name=f"{name}_pointee",
-                    offset=0,
+                    offset=0, 
+                    off_next=0,
                     decl_type=decl_type.type,
                     parent_struct=parent_struct, 
                     is_struct=is_struct
@@ -210,7 +212,7 @@ class ReflVisitor(c_ast.NodeVisitor):
             return field
 
         # PRIMITIVES
-        if base_type in PRIMITIVE_MAP:
+        if base_type in PRIMITIVE_MAP and not isinstance(decl_type, c_ast.ArrayDecl):
                 prim = PRIMITIVE_MAP[base_type]
                 field["kind"] = "K_PRIMITIVE"
                 field["subtype"] = {
@@ -231,7 +233,7 @@ class ReflVisitor(c_ast.NodeVisitor):
             )
 
             sub = self._process_field(
-                REFL_CUSTOM_INNER_NAME[REFL_CUSTOM[base_type]], 0,
+                REFL_CUSTOM_INNER_NAME[REFL_CUSTOM[base_type]], 0, 0,
                 self._str_type_to_decl(contained),
                 parent_struct,
                 is_struct
@@ -241,11 +243,31 @@ class ReflVisitor(c_ast.NodeVisitor):
                 "data": sub
             }
             return field
+        
+        # Fixed-Sixed Arrays
+        # print(decl_type)
+        if isinstance(decl_type, c_ast.ArrayDecl):
+            # print("ARRDECL")
+            field["kind"] = "K_FIXED_ARRAY"
+            field["size"] = int(decl_type.dim.value)
+            sub = self._process_field(
+                    name=f"{name[:-1]}",
+                    offset=0,
+                    off_next=0,
+                    decl_type=decl_type.type,
+                    parent_struct=parent_struct,
+                    is_struct=is_struct
+                )
+            field["subtype"] = {
+                "kind": SubtypeKind.SUBFIELD,
+                "data": sub
+            }
+            return field
 
-        decl_name = decl_type.declname
+
 
         # Composits -> advance one lever deeper
-        decl_type = decl_type.type
+        if hasattr(decl_type, "type"): decl_type = decl_type.type
 
         # This is a typedef'd nested field -> check if its marked as REFLECT(...)
         if isinstance(decl_type, c_ast.IdentifierType):
@@ -275,7 +297,7 @@ class ReflVisitor(c_ast.NodeVisitor):
                 return field
 
             raise RuntimeError(
-                f"Unallowed type: {base_type}, at {parent_struct}::{decl_name}"
+                f"Unallowed type: {base_type}, at {parent_struct}::{name}"
             )
 
 
@@ -283,7 +305,7 @@ class ReflVisitor(c_ast.NodeVisitor):
         # Normal nested composite fields
         # Structs
         if isinstance(decl_type, c_ast.Struct):
-            if decl_type.name is None: self._err_annon_nested(parent_struct, decl_name)
+            if decl_type.name is None: self._err_annon_nested(parent_struct, name)
             field["kind"] = "K_STRUCT"
             field["subtype"] = {
                 "kind": SubtypeKind.STRUCT,
@@ -293,7 +315,7 @@ class ReflVisitor(c_ast.NodeVisitor):
         
         # Unions
         if isinstance(decl_type, c_ast.Union):
-            if decl_type.name is None: self._err_annon_nested(parent_struct, decl_name)
+            if decl_type.name is None: self._err_annon_nested(parent_struct, name)
             field["kind"] = "K_UNION"
             field["subtype"] = {
                 "kind": SubtypeKind.UNION,
@@ -303,27 +325,13 @@ class ReflVisitor(c_ast.NodeVisitor):
         
         # Enums
         if isinstance(decl_type, c_ast.Enum):
-            if decl_type.name is None: self._err_annon_nested(parent_struct, decl_name)
+            if decl_type.name is None: self._err_annon_nested(parent_struct, name)
             field["kind"] = "K_ENUM"
             field["subtype"] = {
                 "kind": SubtypeKind.ENUM,
                 "data": self._process_enum("enum " + decl_type.name, decl_type),
             }
             return field
-        
-        # Fixed-Sixed Arrays
-        if isinstance(decl_type, c_ast.ArrayDecl):
-            field["kind"] = "K_FIXED_ARRAY"
-            field["size"] = decl_type.dim
-            field["subtype"] = self._process_field(
-                    name=f"{name[:-1]}",
-                    offset=0,
-                    decl_type=decl_type.type,
-                    parent_struct=parent_struct,
-                    is_struct=is_struct
-                )
-            return field
-
 
 
             
@@ -355,8 +363,10 @@ class ReflVisitor(c_ast.NodeVisitor):
         for idx, field in enumerate(node.decls):
             off = 0
             if not union: off = offsets[idx]
+            off_next = 0
+            if idx + 1 < len(offsets): off_next = offsets[idx + 1]
             field_res = self._process_field(
-                field.name, off, field.type, typename, not union)
+                field.name, off, off_next, field.type, typename, not union)
 
             struct["fields"].append(field_res)
             struct["n_elements"] += 1

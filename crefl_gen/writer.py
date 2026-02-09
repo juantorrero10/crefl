@@ -13,7 +13,7 @@ N_HASH_TABLES = int(3)
 
 SIZE_HEADER = 33
 SIZE_SECTION_TABLE = 20
-SIZE_FIELD = 24
+SIZE_FIELD = 28
 SIZE_STRUCT = 20
 SIZE_ENUM = 20
 
@@ -105,7 +105,8 @@ class CreflWriter:
     typedef struct CREFL_PACKED
     {
         CREFL_String name;
-        uint32_t offset;            // Runtime offset, nothing to do with the .CREFL
+        uint32_t offset;            // Runtime offset, nothing to do with the .
+        uint32_t next_offset;
         uint32_t array_size;
         uint32_t kind;              // Same as RKind
 
@@ -137,6 +138,7 @@ class CreflWriter:
         offset = field["offset"]
         kind = parser.KIND_VALUES[field["kind"]]
         size = field["size"]
+        next_offset = field["next_offset"]
 
         data = 0
 
@@ -156,18 +158,20 @@ class CreflWriter:
                     data = parser.PRIMITIVE_VALUES[field["subtype"]["data"]]
 
                 case _:
+                    print(field["subtype"]["kind"])
                     raise RuntimeError
 
         # Push current field index
         self.n_fields += 1
-
+        
 
         
         self.fields += struct.pack(
-            "<I I I I I I",
+            "<I I I I I I I",
             name_offset,
             name_length,
             offset,
+            next_offset,
             size,
             kind,
             data
@@ -262,7 +266,7 @@ class CreflWriter:
 
         self._indextable_grow(len(en["indexes"]))
         for index in en["indexes"]:
-            struct.pack_into("<I", self.index_table, (self.curr_it_offset * 4), index)
+            struct.pack_into("<i", self.index_table, (self.curr_it_offset * 4), index)
             self.curr_it_offset += 1
 
         proc = struct.pack(

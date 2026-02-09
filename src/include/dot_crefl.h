@@ -80,6 +80,7 @@ typedef struct CREFL_PACKED
 {
     CREFL_String name;
     uint32_t offset;            // Runtime offset, nothing to do with the .CREFL
+    uint32_t next_offset;
     uint32_t array_size;
     uint32_t kind;              // Same as RKind
 

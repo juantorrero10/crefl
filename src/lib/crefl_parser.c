@@ -73,6 +73,7 @@ void populate_fields() {
         curr->kind = (RKind)ady->kind;
         curr->size = ady->array_size;
         curr->offset = ady->offset;
+        curr->next_offset = ady->next_offset;
         switch (curr->kind)
         {
             case K_DYN_ARRAY:
@@ -106,11 +107,11 @@ void print_field(RField* f, int indent) {
     if (indent == 0) printf("--------------------\n");
     printf("%.*sName: %s\n",    indent, tabs,   f->name);
     printf("%.*sOffset: %zu\n", indent, tabs,   f->offset);
-    printf("%.*sKind: %s\n",    indent, tabs,   refl_enum_strname(kind, f->kind));
+    printf("%.*sKind: %s\n",    indent, tabs,   refl_enum_get_label(kind, f->kind));
     printf("%.*sSize: %zu\n",   indent, tabs,   f->size);
     if (f->kind == K_PRIMITIVE) {
         REnum* prim = refl_fetch_enum("RPrimitive");
-        printf("%.*sPrimitive type: %s\n", indent, tabs, refl_enum_strname(prim, f->subtype.prim));
+        printf("%.*sPrimitive type: %s\n", indent, tabs, refl_enum_get_label(prim, f->subtype.prim));
     } else if ((int)f->kind == 2 || (int)f->kind >= 6) {
         print_field(f->subtype.subfield, indent + 1);
     }
