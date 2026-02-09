@@ -339,22 +339,20 @@ diferent:
                 o->optional = malloc(f_old->subtype.s->total_size);
                 memcpy(o->optional, src, f_old->subtype.s->total_size);
             
-            } else if (f_old->kind == K_POINTER || f_old->kind == K_STRING) {
-                o->optional = *(char**)src;
             } else {
-                o->optional = src;
+                o->optional = *(void**)src;
             }
             o->size = f_old->offset - f_old->next_offset;
         }
 
         else if (f_old->kind == K_FIXED_ARRAY && f_new->kind == K_DYN_ARRAY) {
-            uint8_t* next = out + f_old->offset;
-            size_t sz = next - (uint8_t*)f_old;
+/*             uint8_t* next = out + f_old->offset; */
+            size_t sz = f_old->next_offset - f_old->offset;
             r_array_t* arr = (r_array_t*)dst;
             arr->chunk_size = sz / f_old->size;
             arr->capacity = arr->size = sz / arr->chunk_size;
             arr->array = calloc(arr->chunk_size, arr->size);
-            memcpy(arr->array, src, arr->capacity * arr->size);
+            memcpy(arr->array, src, arr->capacity * arr->chunk_size);
         }
     }
 

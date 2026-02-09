@@ -10,6 +10,7 @@ static void _to_text_any_numerical(RPrimitive p, uint64_t bytes, void* buff, siz
     switch (p)
     {
     case P_BOOL:
+        bytes &= 0xFF;
         (bytes >= 1)
         ? snprintf(buff, sz, "true")
         : snprintf(buff, sz, "false");
@@ -128,13 +129,13 @@ static void __dbg_p_field(RField* f, void* instance, int p, int indent, char_vec
 
         case K_STRING:
             str_push(v, "\"");
-            str_push(v, (char*)((uint8_t*)instance + f->offset));
+            str_push(v, *(char**)((uint8_t*)instance + f->offset));
             str_push(v, "\"");break;
         case K_OPTION:
             o = (r_option_t*)((uint8_t*)instance + f->offset);
             if (o->opt == SOME) {
                 str_push(v, "Some(");
-                __dbg_p_field(f->subtype.subfield, (void*)o->optional, p, indent, v, buff2);
+                __dbg_p_field(f->subtype.subfield, (void*)&o->optional, p, indent, v, buff2);
                 str_push(v, ")");
             } else {
                 str_push(v, "None");
@@ -144,7 +145,7 @@ static void __dbg_p_field(RField* f, void* instance, int p, int indent, char_vec
             str_push(v, "[ ");
             for (size_t i = 0; i < a->size; i++)
             {
-                __dbg_p_field(f->subtype.subfield, *(void**)((uint8_t*)a->array + (i * a->chunk_size)), p, indent, v, buff2);
+                __dbg_p_field(f->subtype.subfield, (void*)((uint8_t*)a->array + (i * a->chunk_size)), p, indent, v, buff2);
                 if (i != a->size - 1) str_push(v, ", ");
             }
             str_push(v, " ]");break;
