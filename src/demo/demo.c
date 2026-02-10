@@ -13,13 +13,15 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-function"
 
-REFLECT(struct) {
-    uint32_t name;
-    uint32_t id;
-} gen_t;
 
 REFLECT(struct) {
-    OPTION(uint64_t) name;
+    bool can_ban;
+    bool can_play;
+} permisions_t;
+
+REFLECT(struct) {
+    OPTION(const char*) name;
+    permisions_t perms;
     uint32_t id;
 } patchable_t;
 
@@ -28,25 +30,27 @@ REFLECT(struct) {
 int main() {
     refl_engine_load(CREFL_FILE);
 
-    gen_t user = {
-        .id = 1,
-        .name = 2,
+    patchable_t p = {
+        .name = {SOME, "fucking name"},
+        .perms = {
+            .can_ban = 0,
+            .can_play = 1,
+        },
+        .id = 1
     };
+
+    RStruct* pa = refl_fetch_struct("patchable_t");
+
+    size_t tot = pa->total_size;
+    size_t disp;
+    for (size_t i = 0; i < pa->n_elements; i++)
+    {
+        disp = (i == pa->n_elements - 1)? pa->total_size : pa->fields[i]->next_offset;
+        printf("%zu -> %zu\n", pa->fields[i]->offset, disp);
+    }
     
-    RStruct* m = refl_fetch_struct("patchable_t");
-    RStruct* g = refl_fetch_struct("gen_t");
-    
-    debug_print_struct(g, &user, 1);
 
-    patchable_t* deser = refl_struct_migrate(g, m, &user);
-
-    debug_print_struct(m, deser, 1);
-
-   //ree(deser->name.array);
-    free(deser);
-    //printf("%p\n", user.name);
-
-
+    debug_print_struct(pa,  &p, 1);
     
 
     return 0;

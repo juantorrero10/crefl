@@ -2,6 +2,7 @@
 
 #include <public/core.h>
 #include <public/types.h>
+#include <stdbool.h>
 
 
 const char* refl_enum_get_label(REnum* type, int val) {
@@ -33,7 +34,7 @@ size_t refl_prim_to_size(RPrimitive p) {
     case P_U0:
         return 0;
     case P_BOOL:
-        return sizeof(int);
+        return sizeof(bool);
     case P_F32:
     case P_I32:
     case P_U32:
@@ -67,4 +68,27 @@ RField* refl_field_by_name(RStruct* s, const char* name) {
 
 RObject refl_get_field_value(RStruct* st, RObject instance, int idx) {
     return *(void**)((uint8_t*)instance + st->fields[idx]->offset);
+}
+
+size_t refl_get_field_size(RField* f) {
+    switch (f->kind)
+    {
+    case K_PRIMITIVE:
+        return refl_prim_to_size(f->subtype.prim);
+    case K_POINTER:
+    case K_STRING:
+        return sizeof(char*);
+    case K_UNION:
+    case K_STRUCT:
+        return f->subtype.s->total_size;
+    case K_ENUM:
+        return sizeof(int);
+    case K_OPTION:
+        return sizeof(r_option_t);
+    case K_DYN_ARRAY:
+        return sizeof(r_array_t);
+    case K_FIXED_ARRAY:
+        return refl_get_field_size(f->subtype.subfield) * f->size;
+    }
+    return 0;
 }

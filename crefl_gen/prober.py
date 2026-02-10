@@ -32,6 +32,7 @@ def get_offsets_of_type(dot_h_path: str, type_name: str, fields: list[int]) -> t
 
     offsets = [int(line) for line in result.stdout.splitlines()[:-1]]
     size = int(result.stdout.splitlines()[-1].strip())
+
     return offsets, size 
 
 

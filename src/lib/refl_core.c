@@ -86,7 +86,10 @@ void refl_destroy_owned_enum(REnum* owned) {
     free(owned);
 }
 
-
+/**
+ * @brief Return a REnum* reflected type with an independent lifetime.
+ * Because of this it needs to be freed with refl_destroy_owned_enum() 
+ */
 REnum* refl_own_enum(REnum* ref) {
     REnum* ret = malloc(sizeof(REnum));
     ret->n_elements = ref->n_elements;

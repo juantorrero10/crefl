@@ -85,32 +85,11 @@ static void str_push_tabs(char_vec* cv, int amnt) {
 }
 
 static void load_numeric_bytes(RField* f, void* instance, uint64_t* out) {
-    *out = 0;
+    *out = 0UL;
     memcpy(out, (uint8_t*)instance + f->offset, refl_prim_to_size(f->subtype.prim));
 }
 
-static size_t __get_size(RField* f) {
-    switch (f->kind)
-    {
-    case K_PRIMITIVE:
-        return refl_prim_to_size(f->subtype.prim);
-    case K_POINTER:
-    case K_STRING:
-        return sizeof(char*);
-    case K_UNION:
-    case K_STRUCT:
-        return f->subtype.s->total_size;
-    case K_ENUM:
-        return sizeof(int);
-    case K_OPTION:
-        return sizeof(r_option_t);
-    case K_DYN_ARRAY:
-        return sizeof(r_array_t);
-    case K_FIXED_ARRAY:
-        return __get_size(f->subtype.subfield) * f->size;
-    }
-    return 0;
-}
+
 
 static void __dbg_print(RStruct* s, void* instance, int p, int indent, char_vec* v, char* buff2);
 
@@ -154,7 +133,7 @@ static void __dbg_p_field(RField* f, void* instance, int p, int indent, char_vec
 
             for (size_t i = 0; i < f->size; i++)
             {
-                __dbg_p_field(f->subtype.subfield, (uint8_t*)instance + f->offset + (i * __get_size(f->subtype.subfield)), p, indent, v, buff2);
+                __dbg_p_field(f->subtype.subfield, (uint8_t*)instance + f->offset + (i * refl_get_field_size(f->subtype.subfield)), p, indent, v, buff2);
                 if (i != f->size - 1) str_push(v, ", ");
             }
             str_push(v, " ]");break;
@@ -213,8 +192,3 @@ void debug_print_struct(RStruct* s, void* instance, int __pretty) {
     printf("%s\n", v.buff);
     free(v.buff);
 }
-
-
-
-
-

@@ -19,6 +19,7 @@ int refl_enum_has_label(REnum* e, const char* lbl);
 void refl_destroy_owned_enum(REnum* owned);
 REnum* refl_own_enum(REnum* ref);
 size_t refl_prim_to_size(RPrimitive p);
+size_t refl_get_field_size(RField* f);
 
 
 
