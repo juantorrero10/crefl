@@ -190,13 +190,14 @@ static void populate_structs() {
     {
         size_t file_idx = struct_ht[i].element_id;
         size_t new_idx = struct_ht[i].hashed_index;
+        CREFL_Struct* ady = &struct_section[file_idx];
+
         refl_st_entry_t* entry = &G_REFL_STRUCTS.map[new_idx];
         while(entry->k_name != NULL) {
             new_idx = (new_idx + 1) % (2 * n_hash_entries);
             entry = &G_REFL_STRUCTS.map[new_idx];
         }
         RStruct* curr =  &entry->val;
-        CREFL_Struct* ady = &struct_section[file_idx];
 
         // Occupy the spot
         set_string(&ady->type_name, (char**)&entry->k_name);

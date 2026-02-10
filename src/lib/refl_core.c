@@ -21,8 +21,8 @@ static inline uint32_t fnv1a(const char* name, size_t sz) {
     for (size_t i = 0; i < sz; i++)
     {
         uint8_t b = name[i];
-        h = (h * 0x01000193) & 0xffffffff;
         h ^= b;
+        h = (h * 0x01000193) & 0xffffffff;
     }
     
     return h;
@@ -41,8 +41,6 @@ REnum* refl_fetch_enum(const char* name) {
 
 
 RStruct* refl_fetch_struct(const char* name) {
-
-
     uint32_t att_count = 0;
     uint32_t idx = fnv1a(name, strlen(name)) % G_REFL_STRUCTS.count;
     while(((G_REFL_STRUCTS.map[idx].k_name == NULL) 

@@ -14,14 +14,36 @@
 #pragma GCC diagnostic ignored "-Wunused-function"
 
 
+
+
+REFLECT(struct) {
+    uint32_t a;
+    uint32_t b;
+} og_t;
+
+REFLECT(struct) {
+    uint64_t c;
+    uint32_t a;
+    uint32_t b;
+} new_t;
+
+REFLECT(struct) {
+    bool can_play;
+    bool can_ban;
+} perms_t;
+
+REFLECT(struct) {
+    OPTION(const char*) name;
+    OPTION(perms_t) perms;
+    uint32_t id;
+} userr_t;
+
 int main() {
     refl_engine_load(CREFL_FILE);
-    
     RStruct* t1 = refl_fetch_struct("og_t");
     RStruct* t2 = refl_fetch_struct("new_t");
-    
-    printf("COMP: %d\n", refl_comp_struct_copy(t1, t2));
-
+    RStruct* t3 = refl_fetch_struct("perms_t");
+    RStruct* t4 = refl_fetch_struct("userr_t");
     
 
     return 0;
