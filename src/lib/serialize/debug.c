@@ -62,6 +62,10 @@ typedef struct {
 } char_vec;
 
 static void str_push(char_vec* cv, const char* str) {
+    if (str == NULL) {
+        str_push(cv, ("(null)"));
+        return;
+    }
     size_t sz = strlen(str);
 
     while (cv->size + sz + 1 > cv->cap) {
@@ -107,9 +111,11 @@ static void __dbg_p_field(RField* f, void* instance, int p, int indent, char_vec
             break;
 
         case K_STRING:
-            str_push(v, "\"");
-            str_push(v, *(char**)((uint8_t*)instance + f->offset));
-            str_push(v, "\"");break;
+            char* str = *(char**)((uint8_t*)instance + f->offset);
+            if (str) str_push(v, "\"");
+            str_push(v, str);
+            if (str) str_push(v, "\"");
+            break;
         case K_OPTION:
             o = (r_option_t*)((uint8_t*)instance + f->offset);
             if (o->opt == SOME) {

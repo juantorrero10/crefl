@@ -14,43 +14,14 @@
 #pragma GCC diagnostic ignored "-Wunused-function"
 
 
-REFLECT(struct) {
-    bool can_ban;
-    bool can_play;
-} permisions_t;
-
-REFLECT(struct) {
-    OPTION(const char*) name;
-    permisions_t perms;
-    uint32_t id;
-} patchable_t;
-
-
-
 int main() {
     refl_engine_load(CREFL_FILE);
-
-    patchable_t p = {
-        .name = {SOME, "fucking name"},
-        .perms = {
-            .can_ban = 0,
-            .can_play = 1,
-        },
-        .id = 1
-    };
-
-    RStruct* pa = refl_fetch_struct("patchable_t");
-
-    size_t tot = pa->total_size;
-    size_t disp;
-    for (size_t i = 0; i < pa->n_elements; i++)
-    {
-        disp = (i == pa->n_elements - 1)? pa->total_size : pa->fields[i]->next_offset;
-        printf("%zu -> %zu\n", pa->fields[i]->offset, disp);
-    }
     
+    RStruct* t1 = refl_fetch_struct("og_t");
+    RStruct* t2 = refl_fetch_struct("new_t");
+    
+    printf("COMP: %d\n", refl_comp_struct_copy(t1, t2));
 
-    debug_print_struct(pa,  &p, 1);
     
 
     return 0;

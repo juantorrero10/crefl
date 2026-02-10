@@ -51,7 +51,7 @@ int refl_comp_field_nametype(RField* a, RField* b) {
             break;
         case K_STRUCT:
         case K_UNION:
-            if (!refl_comp_struct_nametype_subset(a->subtype.s, b->subtype.s)) return 0;
+            if (!refl_comp_struct_subset(a->subtype.s, b->subtype.s)) return 0;
             break;
         case K_ENUM:
             // Comparing recursed enums allowing a subset is rarely useful and extrimely inneficient
@@ -64,7 +64,7 @@ int refl_comp_field_nametype(RField* a, RField* b) {
     return 1;
 }
 
-int refl_comp_struct_nametype_subset(RStruct* tiny, RStruct* large) {
+int refl_comp_struct_subset(RStruct* tiny, RStruct* large) {
     if (!large^!tiny) return 0;
     if (!tiny) return 1;
     if (strcmp(tiny->name_type, large->name_type) == 0) return 1;
@@ -119,6 +119,35 @@ int refl_comp_struct_schema(RStruct* model, RStruct* generated) {
         RField* g = refl_field_by_name(generated, m->name);
         if (!refl_comp_field_schema(m,g)) return 0;
     }
+    return 1;
+}
+
+int refl_comp_struct_copy(RStruct* original, RStruct* new) {
+    if (original->n_elements > new->n_elements) return 0;
+    const char* first_name = original->fields[0]->name;
+    size_t index = (size_t)-1;
+    for (size_t i = 0; i < new->n_elements; i++)
+    {
+        if (!strcmp(new->fields[i]->name, first_name))
+            index = i;
+    }
+    if (index == (size_t)-1) return 0;
+    if (new->fields[index]->kind != original->fields[0]->kind)
+        return 0;
+
+    size_t initial_offset = new->fields[index]->offset;
+
+    for (size_t i = 1; i < original->n_elements; i++)
+    {
+        RField* og = original->fields[i];
+        RField* n = new->fields[index+i];
+        if (
+            strcmp(n->name, og->name)
+            || (n->kind != og->kind)
+            || (n->offset - initial_offset != og->offset))
+            return 0;
+    }
+    
     return 1;
 }
 
@@ -222,10 +251,12 @@ static void migrate_array(
     RField* f_old,
     RField* f_new,
     void* src,
-    void* dst
+    void* dst,
+    size_t len
 ) {
-    size_t old_len = f_old->size;
-    size_t new_len = f_old->size;
+    
+    size_t old_len = len;
+    size_t new_len = len;
 
     RField* e_old = f_old->subtype.subfield;
     RField* e_new = f_new->subtype.subfield;
@@ -241,7 +272,7 @@ static void migrate_array(
         void* src_elem = (uint8_t*)src + i * old_stride;
         void* dst_elem = (uint8_t*)dst + i * new_stride;
 
-        /* Same kind → recurse */
+        /* Same kind -> recurse */
         if (e_old->kind == e_new->kind) {
             switch (e_old->kind) {
             case K_PRIMITIVE:
@@ -292,7 +323,7 @@ static void migrate_array(
             );
         }
 
-        /* Otherwise: incompatible element → skip */
+        /* Otherwise: incompatible element -> skip */
     }
 }
 
@@ -345,16 +376,31 @@ static void refl_migrate_field(
     }
 
     case K_FIXED_ARRAY:
-        migrate_array(f_old, f_new, src, dst);
+        migrate_array(f_old, f_new, src, dst, f_old->size);
         return;
 
     case K_DYN_ARRAY:
-        if (f_old->subtype.subfield->kind == f_new->subtype.subfield->kind)
-            memcpy(dst, src, sizeof(r_array_t));
+        r_array_t* as = (r_array_t*)src;
+        r_array_t* ad = (r_array_t*)dst;
+        ad->size = as->size;
+        ad->capacity = as->capacity;
+        ad->chunk_size = refl_get_field_size(f_new->subtype.subfield);
+        ad->array = calloc(ad->chunk_size, ad->size);
+        migrate_array(f_old, f_new, as->array, ad->array, as->size);
         return;
 
     case K_POINTER:
         memcpy(dst, src, sizeof(void*));
+        return;
+
+    case K_OPTION:  
+        r_option_t* o = (r_option_t*)src;
+        r_option_t* n = (r_option_t*)dst;
+
+        n->opt = o->opt;
+        if (o->opt == SOME) {
+            n->optional = o->optional;
+        }
         return;
 
     default:
@@ -363,17 +409,7 @@ static void refl_migrate_field(
 
 diferent:
 
-    if (f_old->kind == K_OPTION && f_new->kind == K_OPTION) {
-        r_option_t* o = (r_option_t*)src;
-        r_option_t* n = (r_option_t*)dst;
-
-        n->opt = o->opt;
-        if (o->opt == SOME) {
-            n->optional = o->optional;
-        }
-    }
-
-    else if (f_old->kind == K_OPTION && f_new->kind != K_OPTION) {
+    if (f_old->kind == K_OPTION && f_new->kind != K_OPTION) {
         r_option_t* o = (r_option_t*)src;
         if (o->opt == SOME) {
             refl_migrate_field(
@@ -404,7 +440,7 @@ diferent:
     else if (f_old->kind == K_FIXED_ARRAY && f_new->kind == K_DYN_ARRAY) {
         size_t old_sz = refl_get_field_size(f_old);
         size_t new_sz = refl_get_field_size(f_new->subtype.subfield) * f_old->size;
-        assert(new_sz >= old_sz);
+        if (new_sz < old_sz) return;
         r_array_t* arr = (r_array_t*)dst;
         arr->chunk_size = new_sz / f_old->size;
         arr->capacity = arr->size = new_sz / arr->chunk_size;
@@ -412,8 +448,16 @@ diferent:
         if (old_sz == new_sz) {
             memcpy(arr->array, src, arr->capacity * arr->chunk_size);
         } else {
-            migrate_array(f_old, f_new, src, arr->array);
+            migrate_array(f_old, f_new, src, arr->array, f_old->size);
         }
+    }
+
+    else if (f_old->kind == K_DYN_ARRAY && f_new->kind == K_FIXED_ARRAY) {
+        r_array_t* arr = (r_array_t*)src;
+        size_t old_size = arr->chunk_size * arr->size;
+        size_t new_size = refl_get_field_size(f_new);
+        if (old_size > new_size) return;
+        migrate_array(f_old, f_new, arr->array, dst, f_new->size);
     }
 }
 
