@@ -2,6 +2,7 @@
 #define PUBLIC_PATCH_H_
 
 REFLECT(enum) {
+    RPA_RENAME_TYPE,
     RPA_ADD_FIELD,
     RPA_RM_FIELD,
     RPA_RENAME_FIELD,
@@ -18,10 +19,12 @@ typedef struct {
     union {
         const char* renamed;
         RKind new_type;
+        RField* field;
         int enum_unique_value;
     } action_data;
 } RPatch;
 
 REnum* refl_patch_enum(REnum* old, RPatch patch );
+RStruct* refl_patch_struct(RStruct* old, RPatch* patches, size_t n);
 
 #endif // PUBLIC_PATCH_H_

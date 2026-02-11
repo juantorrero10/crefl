@@ -1,7 +1,10 @@
+#define _GNU_SOURCE
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <stdbool.h>
 
 #include <public/core.h>
 #include <public/types.h>
@@ -80,13 +83,13 @@ int refl_comp_struct_subset(RStruct* tiny, RStruct* large) {
     return 1;
 }
 
-int refl_comp_struct_schema(RStruct* model, RStruct* generated);
+int refl_comp_struct_schema(RStruct* generated,  RStruct* model);
 
-static int refl_comp_field_schema(RField* m, RField* g) {
+static int refl_comp_field_schema(RField* g, RField* m) {
     if (m->kind == K_OPTION) {
         if (!g) return 1;
         if (g->kind == K_OPTION) return 0;
-        return refl_comp_field_schema(m->subtype.subfield, g);
+        return refl_comp_field_schema(g, m->subtype.subfield);
     }
     if ((!m)^(!g)) return 0;
     if (!m) return 1; 
@@ -96,7 +99,7 @@ static int refl_comp_field_schema(RField* m, RField* g) {
     case K_PRIMITIVE:
         return refl_primitive_can_promote(g->subtype.prim, m->subtype.prim);
     case K_STRUCT:
-        return refl_comp_struct_schema(m->subtype.s, g->subtype.s);
+        return refl_comp_struct_schema(g->subtype.s, m->subtype.s);
     case K_UNION:
         return strcmp(m->subtype.u->name_type, g->subtype.u->name_type) == 0;
     case K_ENUM:
@@ -105,19 +108,19 @@ static int refl_comp_field_schema(RField* m, RField* g) {
     case K_DYN_ARRAY:
     case K_POINTER:
         if (m->size < g->size) return 0;
-        return refl_comp_field_schema(m->subtype.subfield, g->subtype.subfield);    
+        return refl_comp_field_schema(g->subtype.subfield, m->subtype.subfield);    
     default:
         break;
     }
     return 1;
 }
 
-int refl_comp_struct_schema(RStruct* model, RStruct* generated) {
+int refl_comp_struct_schema(RStruct* generated, RStruct* model) {
     for (size_t i = 0; i < model->n_elements; i++)
     {
         RField* m = model->fields[i];
         RField* g = refl_field_by_name(generated, m->name);
-        if (!refl_comp_field_schema(m,g)) return 0;
+        if (!refl_comp_field_schema(g, m)) return 0;
     }
     return 1;
 }
@@ -215,7 +218,7 @@ static void refl_primitive_convert(
         case P_U32: i = *(const uint32_t*)src; break;
         case P_I64: i = *(const int64_t*)src; break;
         case P_U64: i = *(const uint64_t*)src; break;
-        case P_BOOL:i = *(const int*)src; break;
+        case P_BOOL:i = *(const _Bool*)src; break;
         default: return;
     }
 
@@ -332,7 +335,9 @@ static void refl_migrate_field(
     RField* f_old,
     RField* f_new,
     uint8_t* src,
-    uint8_t* dst
+    uint8_t* dst,
+    int wrapped_src,
+    int wrapped_dst
 ) {
     int val = *(int*)src;
 
@@ -351,7 +356,7 @@ static void refl_migrate_field(
         return;
 
     case K_STRING:
-        *(char**)dst = *(char**)src;
+        *(char**)dst = strdup(*(char**)src);
         return;
 
     case K_ENUM:
@@ -363,13 +368,22 @@ static void refl_migrate_field(
         return;
 
     case K_STRUCT: {
+        void* _src = src;
+        void* _dst = dst;
+        if (wrapped_dst) {
+            *(void**)dst = malloc(f_new->subtype.s->total_size);
+            _dst = *(void**)dst;
+        } else if (wrapped_src){
+            _src = *(void**)src;
+        }
+
         void* nested = refl_struct_migrate(
             f_old->subtype.s,
             f_new->subtype.s,
-            src
+            _src
         );
         if (nested) {
-            memcpy(dst, nested, f_new->subtype.s->total_size);
+            memcpy(_dst, nested, f_new->subtype.s->total_size);
             free(nested);
         }
         return;
@@ -399,7 +413,13 @@ static void refl_migrate_field(
 
         n->opt = o->opt;
         if (o->opt == SOME) {
-            n->optional = o->optional;
+            refl_migrate_field(
+                f_old->subtype.subfield,
+                f_new->subtype.subfield,
+                (uint8_t*)&o->optional,
+                (uint8_t*)&n->optional,
+                1,1
+            );
         }
         return;
 
@@ -415,8 +435,9 @@ diferent:
             refl_migrate_field(
                 f_old->subtype.subfield,
                 f_new,
-                o->optional,
-                dst
+                (uint8_t*)&o->optional,
+                dst,
+                1, 0
             );
         }
     }
@@ -430,7 +451,8 @@ diferent:
             f_old,
             f_new->subtype.subfield,
             src,
-            (void*)&o->optional
+            (void*)&o->optional,
+            0, 1
         );
 
         o->size = f_new->subtype.subfield->next_offset -
@@ -454,9 +476,8 @@ diferent:
 
     else if (f_old->kind == K_DYN_ARRAY && f_new->kind == K_FIXED_ARRAY) {
         r_array_t* arr = (r_array_t*)src;
-        size_t old_size = arr->chunk_size * arr->size;
-        size_t new_size = refl_get_field_size(f_new);
-        if (old_size > new_size) return;
+        size_t new_size = refl_get_field_size(f_new->subtype.subfield);
+        if (arr->chunk_size > new_size) return;
         migrate_array(f_old, f_new, arr->array, dst, f_new->size);
     }
 }
@@ -481,7 +502,7 @@ RObject refl_struct_migrate(RStruct* old, RStruct* new, RObject instance) {
         uint8_t* src = (uint8_t*)instance + f_old->offset;
         uint8_t* dst = out + f_new->offset;
 
-        refl_migrate_field(f_old, f_new, src, dst);
+        refl_migrate_field(f_old, f_new, src, dst, 0, 0);
     }
 
     return out;

@@ -120,7 +120,12 @@ static void __dbg_p_field(RField* f, void* instance, int p, int indent, char_vec
             o = (r_option_t*)((uint8_t*)instance + f->offset);
             if (o->opt == SOME) {
                 str_push(v, "Some(");
-                __dbg_p_field(f->subtype.subfield, (void*)&o->optional, p, indent, v, buff2);
+                if (f->subtype.subfield->kind == K_STRUCT || 
+                    f->subtype.subfield->kind == K_UNION) {
+                    __dbg_p_field(f->subtype.subfield, o->optional, p, indent, v, buff2);
+                } else {
+                    __dbg_p_field(f->subtype.subfield, (void*)&o->optional, p, indent, v, buff2);
+                }
                 str_push(v, ")");
             } else {
                 str_push(v, "None");
