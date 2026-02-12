@@ -5,7 +5,7 @@
 #include "../include/public/types.h"
 #include "../include/public/cmp.h"
 #include "../include/public/patch.h"
-#include <serial/debug.h>
+#include <serial/formats.h>
 #include <stdbool.h>
 
 #pragma GCC diagnostic push
@@ -32,9 +32,18 @@ REFLECT(struct) {
     bool can_play;
 } perms_t;
 
+REFLECT(enum) {
+    VALUE_1,
+    VALUE_2,
+    OKOKOK,
+    SOME_FUCKING_EROR
+} some_enum;
+
 REFLECT(struct) {
     DYN_ARRAY(uint32_t) ids;
+    OPTION(uint64_t) nothing_here;
     OPTION(const char*) name;
+    some_enum enum_variable;
     OPTION(perms_t) perms;
 } userr_t;
 
@@ -54,7 +63,9 @@ int main() {
     userr_t old_inst = { 
         .ids = {.array = (uint32_t[]){1, 2, 3, 4, 5}, .chunk_size = sizeof(uint32_t), .size = 5, .capacity = 5}, 
         .name = {SOME, "JuanchoPancho"}, 
-        .perms = {.opt=SOME, .optional=&p} };
+        .perms = {.opt=SOME, .optional=&p},
+        .enum_variable = SOME_FUCKING_EROR
+    };
 
     debug_print_struct(t4, &old_inst, 1);
 
@@ -63,10 +74,12 @@ int main() {
 
     void* new_instance = refl_struct_migrate(t4, new, &old_inst);
 
-    perms_t* ppp = refl_get_field(new, "perms", &new_instance);
+    void* buff = serialize_json(new, new_instance);
+    printf("%s\n", (char*)buff);
+    free(buff);
 
-    debug_print_struct(new, new_instance, 1);
 
+    refl_generic_destructor(new, new_instance);
     refl_destroy_struct(new);
 
     return 0;

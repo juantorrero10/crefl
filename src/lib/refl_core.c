@@ -187,7 +187,7 @@ void refl_destroy_field(RField* owned) {
     case K_POINTER:
         refl_destroy_field(owned->subtype.subfield);
         break;
-    case K_STRING:
+    case K_STRUCT:
     case K_UNION:
         refl_destroy_struct(owned->subtype.s);
         break;
@@ -211,4 +211,36 @@ void refl_destroy_struct(RStruct* owned) {
     }
     free(owned->fields);
     free(owned);
+}
+
+static void __field_generic_destructor(RField* f, void* src) {
+    switch (f->kind)
+    {
+    case K_DYN_ARRAY:
+        r_array_t* a = (r_array_t*)src;
+        free(a->array);
+        break;
+
+    case K_OPTION:
+        r_option_t* o = (r_option_t*)src;
+        if (f->subtype.subfield->kind == K_STRING) {
+            free(o->optional);
+        }
+        break;
+
+    case K_STRING:
+        free(src);
+    
+    default:
+        break;
+    }
+}
+
+void refl_generic_destructor(RStruct* t, RObject instance) {
+    for (size_t i = 0; i < t->n_elements; i++)
+    {
+        RField* f = t->fields[i];
+        __field_generic_destructor(f, instance + f->offset);
+    }
+    free(instance);
 }

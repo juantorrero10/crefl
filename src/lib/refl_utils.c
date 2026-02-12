@@ -53,7 +53,7 @@ size_t refl_prim_to_size(RPrimitive p) {
     default:
         break;
     }
-    return (size_t)-1;
+    return sizeof(int);
 }
 
 

@@ -142,6 +142,8 @@ RStruct* refl_patch_struct(RStruct* old, RPatch* patches, size_t n) {
             ssize_t idx = find_field_index(ret, p->target);
             if (idx < 0) break;
 
+            free((char*)ret->fields[idx]->name);
+
             ret->fields[idx]->name = strdup(p->action_data.renamed);
             break;
         }
