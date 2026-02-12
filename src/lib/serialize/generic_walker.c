@@ -166,7 +166,7 @@ static void gc_field(SerializePolicy* sp, RField* f, void* instance, int indent,
             }
             break;
         case K_STRUCT:
-            gc_struct(sp, f->subtype.s, (uint8_t*)instance + f->offset, indent + 1, v, buff2);break;
+            gc_struct(sp, f->subtype.s, (uint8_t*)instance + f->offset, indent, v, buff2);break;
         case K_POINTER:
             void* ptr = *(void**)((uint8_t*)instance + f->offset);
             snprintf(buff2, 50, "%p", ptr);

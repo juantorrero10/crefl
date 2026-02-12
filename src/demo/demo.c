@@ -40,9 +40,9 @@ REFLECT(enum) {
 } some_enum;
 
 REFLECT(struct) {
+    OPTION(const char*) name;
     DYN_ARRAY(uint32_t) ids;
     OPTION(uint64_t) nothing_here;
-    OPTION(const char*) name;
     some_enum enum_variable;
     OPTION(perms_t) perms;
 } userr_t;
@@ -50,15 +50,6 @@ REFLECT(struct) {
 int main() {
     refl_engine_load(CREFL_FILE);
     RStruct* t4 = refl_fetch_struct("userr_t");
-
-    RField change_field = *(refl_field_by_name(t4, "ids"));
-    change_field.kind = K_FIXED_ARRAY; change_field.size = 4;
-    RField f2 = *(refl_field_by_name(t4, "perms")->subtype.subfield);
-    RPatch patches[] = {
-        { .action = RPA_CHANGE_FIELD, .action_data.field = &change_field, .target = "ids"},
-        { .action = RPA_CHANGE_FIELD, .action_data.field = &f2, .target = "perms"},
-        { .action = RPA_RENAME_FIELD, .action_data.renamed = "perms", .target = "optional"},
-    };
     perms_t p = {.can_ban = 0, .can_play = 1};
     userr_t old_inst = { 
         .ids = {.array = (uint32_t[]){1, 2, 3, 4, 5}, .chunk_size = sizeof(uint32_t), .size = 5, .capacity = 5}, 
@@ -67,20 +58,15 @@ int main() {
         .enum_variable = SOME_FUCKING_EROR
     };
 
-    debug_print_struct(t4, &old_inst, 1);
-
-    RStruct* new = refl_patch_struct(t4, patches, 3);
-    
-
-    void* new_instance = refl_struct_migrate(t4, new, &old_inst);
-
-    void* buff = serialize_json(new, new_instance);
+    void* buff = serialize_json(t4, &old_inst);
     printf("%s\n", (char*)buff);
+    DeserializeResult inst = deserialize_json(t4, buff);
+    if (inst.st == DR_ERR) {
+        printf("Could not deserialize: '%s'\n", deserialize_strerror(inst.data.err));
+    } else {
+        printf("Returned pointer: %p\n", inst.data.buff);
+    }
     free(buff);
-
-
-    refl_generic_destructor(new, new_instance);
-    refl_destroy_struct(new);
 
     return 0;
 }

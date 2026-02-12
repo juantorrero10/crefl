@@ -1,8 +1,11 @@
 #ifndef SERIAL_DEBUG_H_
 #define SERIAL_DEBUG_H_
 
-void debug_print_struct(RStruct* s, void* instance, int __pretty);
+#include <serial/err.h>
 
-void* serialize_json(RStruct* s, void* instance);
+void debug_print_struct(RStruct* s, RObject instance, int __pretty);
+
+void* serialize_json(RStruct* s, RObject instance);
+DeserializeResult deserialize_json(RStruct* model, void* stream);
 
 #endif // SERIAL_DEBUG_H_
