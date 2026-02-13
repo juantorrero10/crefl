@@ -10,17 +10,21 @@ char* deserialize_strerror(DeserializeError e) {
     case DE_NOT_SUPPORTED_DTARRAYS:
         return "Non-homogeneus arrays are not supported for deserializing.";
     case DE_STREAM_INCOMPATIBLE:
-        return "Given stream and given model type were not compatible: ";
+        return "Given stream and given model type were not compatible.";
     case DE_NULL_PTR:
         return "One or more parameters were NULL pointers.";
     case DE_SYNTAX_ERROR:
         return "Invalid syntax";
     case DE_UNBALANCED_STREAM:
-        return "Given stream's nesting characters '{', '}', '[', ']' were not balanced";
+        return "Given stream's nesting characters '{', '}', '[', ']' were not balanced.";
     case DE_UNEXPECTED_CHARACTER:
-        return "Unexpected character";
+        return "Unexpected character.";
     case DE_TOO_MUCH_NESTING:
-        return "Given stream exceded nesting limit of 512";
+        return "Given stream exceded nesting limit of 512.";
+    case DE_UNCLOSED_DQUOTE:
+        return "Unterminated dquote (\") in given stream.";
+    case DE_NUMBER_CONVERSION_ERROR:
+        return "Couldn't get a numeric value from a JSON value on the given stream.";
     
     default:
         return "";
