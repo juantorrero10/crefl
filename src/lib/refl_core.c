@@ -229,7 +229,7 @@ static void __field_generic_destructor(RField* f, void* src) {
         break;
 
     case K_STRING:
-        free(src);
+        free(*(char**)src);
     
     default:
         break;

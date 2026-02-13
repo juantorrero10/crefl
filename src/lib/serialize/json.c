@@ -172,7 +172,7 @@ static int _json_str_to_numeric(
         uint64_t v = strtoul((char*)buff + start, NULL, 10);
         if (errno) return 0;
         *out_prim_kind = _smallest_primitive_type_unsigned(v, &s);
-        memcpy(&out_bytes, &v, s);
+        memcpy(out_bytes, &v, s);
     }
     buff[cur] = replacing;
     return 1;
@@ -275,7 +275,6 @@ reading_value:
             de = DE_UNEXPECTED_CHARACTER; goto return_err;}
         jw->cur++;
         while (skip_chars(currchar)) jw->cur++;
-        printf("%c\n", currchar);
         switch (currchar)
         {
         case '\"':
@@ -348,6 +347,7 @@ reading_string:
                 uint8_t* str = jw->buff + substr_start;
                 jw->cur++;
                 _uob_append(instance, &str, sizeof(char*));
+                substr_start = (size_t)-1;
                 goto finish_field;
             }
             // Actual scaping of characters will be handled later down the line.
