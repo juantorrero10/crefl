@@ -6,9 +6,9 @@
 #include <assert.h>
 #include <stdbool.h>
 
-#include <public/core.h>
-#include <public/types.h>
-#include <public/cmp.h>
+#include <crefl/core.h>
+#include <crefl/types.h>
+#include <crefl/cmp.h>
 
 static int refl_primitive_can_promote(RPrimitive a, RPrimitive b);
 

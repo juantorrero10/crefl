@@ -2,10 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <public/types.h>
-#include <public/core.h>
+#include <crefl/types.h>
+#include <crefl/core.h>
 
-#include <serial/generic_walker.h>
+#include <serial/_common.h>
 
 #define BUFFERS_INITIAL 64
 
@@ -226,3 +226,62 @@ void* walk_type(SerializePolicy* sp, RStruct* s, void* instance) {
     gc_struct(sp, s, instance, 0, &v, buff);
     return v.buff;
 }
+
+
+// ================== COLLECTIONS ============================= //
+temp_field_pool _fp_init(size_t initial) {
+    temp_field_pool fp = {0};
+    fp.f = calloc(sizeof(RField), initial);
+    fp.capacity = initial;
+    fp.sz = 0;
+    return fp;
+}
+
+void _fp_append(temp_field_pool* fp, RField* f) {
+    if (fp->sz >= fp->capacity) {
+        fp->f = realloc(fp->f, sizeof(RField) * 2 * fp->capacity);
+        fp->capacity *= 2;
+    }
+    memcpy(&fp->f[fp->sz++], f, sizeof(RField));
+}
+
+void _fp_free(temp_field_pool* fp) { free(fp->f); }
+
+
+g_arraylist_t _gal_init(size_t initial, size_t chunk_size) {
+    g_arraylist_t gal = {0};
+    gal.capacity = initial;
+    gal.chunk_size = chunk_size;
+    gal.data = calloc(chunk_size, initial);
+    gal.size = 0;
+    return gal;
+}
+
+void _gal_append(g_arraylist_t* gal, void* object) {
+    if (gal->size >= gal->capacity) {
+        gal->data = realloc(gal->data, gal->capacity * 2 * gal->chunk_size);
+        gal->capacity *= 2;
+    }
+    memcpy(&((uint8_t*)gal->data)[gal->size++ * gal->chunk_size], object, gal->chunk_size);
+}
+
+void _gal_free(g_arraylist_t* gal) { free(gal->data); }
+
+unordered_buffer _uob_init(size_t initial) {
+    unordered_buffer uob = {0};
+    uob.data = calloc(1, initial);
+    uob.cur = 0;
+    uob.capacity = initial;
+    return uob;
+}
+
+void _uob_append(unordered_buffer* uob, void* src, size_t sz) {
+    if (uob->cur + sz >= uob->capacity) {
+        uob->data = realloc(uob->data, 2 * uob->capacity);
+        uob->capacity *= 2;
+    }
+    memcpy(uob->data + uob->cur, src, sz);
+    uob->cur += sz;
+}
+
+void _uob_free(unordered_buffer* uob) { free(uob->data); }

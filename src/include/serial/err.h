@@ -2,19 +2,24 @@
 #define SERIAL_ERR_H_
 
 typedef enum {
+    DE_NULL_PTR,
+    DE_SYNTAX_ERROR,
     DE_STREAM_INCOMPATIBLE,
     DE_NOT_SUPPORTED_DTARRAYS,
+    DE_UNBALANCED_STREAM,
+    DE_UNEXPECTED_CHARACTER,
+    DE_TOO_MUCH_NESTING
 } DeserializeError;
 
 typedef struct {
     enum { DR_OK, DR_ERR } st;
+    DeserializeError err;
     union 
-    {
+    {   
+        char* err_str;
         void* buff;
-        DeserializeError err;
     } data;
 } DeserializeResult;
 
-char* deserialize_strerror(DeserializeError e);
 
 #endif // SERIAL_ERR_H_

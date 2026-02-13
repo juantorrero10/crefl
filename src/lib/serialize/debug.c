@@ -2,10 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <public/types.h>
-#include <public/core.h>
+#include <crefl/types.h>
+#include <crefl/core.h>
 
-#include <serial/generic_walker.h>
+#include <serial/_common.h>
 
 void debug_print_struct(RStruct* s, void* instance, int __pretty) {
     SerializePolicy sp = {

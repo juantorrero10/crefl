@@ -7,10 +7,10 @@
 #include <string.h>
 #include <errno.h>
 
-#include <public/types.h>
-#include <fetched.h>
-#include <dot_crefl.h>
-#include <public/core.h>
+#include <crefl/types.h>
+#include <_fetched.h>
+#include <_dot_crefl.h>
+#include <crefl/core.h>
 
 CREFL_Section_table* sections_tables = NULL;
 CREFL_Header* base_ptr = NULL;

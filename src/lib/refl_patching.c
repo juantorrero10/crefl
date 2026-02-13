@@ -3,9 +3,9 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include <public/core.h>
-#include <public/types.h>
-#include <public/patch.h>
+#include <crefl/core.h>
+#include <crefl/types.h>
+#include <crefl/patch.h>
 
 
 REnum* refl_patch_enum(REnum* old, RPatch patch ) {

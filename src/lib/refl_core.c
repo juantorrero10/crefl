@@ -5,8 +5,8 @@
 #include <stdlib.h>
 
 
-#include <public/core.h>
-#include <fetched.h>
+#include <crefl/core.h>
+#include <_fetched.h>
 
 refl_st_hashmap_t G_REFL_STRUCTS = { 0 };
 refl_un_hashmap_t G_REFL_UNIONS = { 0 };
