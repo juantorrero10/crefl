@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,6 +7,7 @@
 #include <crefl/core.h>
 
 #include <serial/_common.h>
+#include <_arena.h>
 
 #define BUFFERS_INITIAL 64
 
@@ -72,10 +74,8 @@ static void str_push(char_vec* cv, const char* str) {
     size_t sz = strlen(str);
 
     while (cv->size + sz + 1 > cv->cap) {
-        size_t old = cv->cap;
+        arena_alloc(0, cv->cap);
         cv->cap *= 2;
-        cv->buff = realloc(cv->buff, cv->cap);
-        memset(cv->buff + old, 0, cv->cap - old);
     }
 
     memcpy(cv->buff + cv->size, str, sz);
@@ -219,19 +219,20 @@ static void gc_struct(SerializePolicy* sp, RStruct* s, void* instance, int inden
 
 void* walk_type(SerializePolicy* sp, RStruct* s, void* instance) {
     if (!s) return NULL;
-    char_vec v = { .buff = malloc(BUFFERS_INITIAL), .cap = BUFFERS_INITIAL, .size = 0 };
-    memset(v.buff, 0, BUFFERS_INITIAL);
+    char_vec v = { .buff = arena_alloc(0, BUFFERS_INITIAL), .cap = BUFFERS_INITIAL, .size = 0 };
     char buff[BUFFERS_INITIAL];
     if (sp->format_primitive == NULL) sp->format_primitive = generic_numerical_converter;
     gc_struct(sp, s, instance, 0, &v, buff);
-    return v.buff;
+    arena_dealloc(0, v.cap);
+    return strdup(v.buff);
 }
 
 
 // ================== COLLECTIONS ============================= //
-temp_field_pool _fp_init(size_t initial) {
+temp_field_pool _fp_init(int n_arena, size_t initial) {
     temp_field_pool fp = {0};
-    fp.f = calloc(sizeof(RField), initial);
+    fp.f = arena_alloc(n_arena, sizeof(RField) * initial);
+    fp.n_arena = n_arena;
     fp.capacity = initial;
     fp.sz = 0;
     return fp;
@@ -239,37 +240,43 @@ temp_field_pool _fp_init(size_t initial) {
 
 void _fp_append(temp_field_pool* fp, RField* f) {
     if (fp->sz >= fp->capacity) {
-        fp->f = realloc(fp->f, sizeof(RField) * 2 * fp->capacity);
+        arena_alloc(fp->n_arena, fp->capacity * sizeof(RField));
         fp->capacity *= 2;
     }
     memcpy(&fp->f[fp->sz++], f, sizeof(RField));
 }
 
-void _fp_free(temp_field_pool* fp) { free(fp->f); }
+void _fp_free(temp_field_pool* fp) { 
+    arena_dealloc(fp->n_arena, fp->capacity * sizeof(RField)); 
+}
 
 
-g_arraylist_t _gal_init(size_t initial, size_t chunk_size) {
+g_arraylist_t _gal_init(int n_arena, size_t initial, size_t chunk_size) {
     g_arraylist_t gal = {0};
     gal.capacity = initial;
     gal.chunk_size = chunk_size;
-    gal.data = calloc(chunk_size, initial);
+    gal.n_arena = n_arena;
+    gal.data = arena_alloc(n_arena, initial * chunk_size);
     gal.size = 0;
     return gal;
 }
 
 void _gal_append(g_arraylist_t* gal, void* object) {
     if (gal->size >= gal->capacity) {
-        gal->data = realloc(gal->data, gal->capacity * 2 * gal->chunk_size);
+        arena_alloc(gal->n_arena, gal->capacity * gal->chunk_size);
         gal->capacity *= 2;
     }
     memcpy(&((uint8_t*)gal->data)[gal->size++ * gal->chunk_size], object, gal->chunk_size);
 }
 
-void _gal_free(g_arraylist_t* gal) { free(gal->data); }
+void _gal_free(g_arraylist_t* gal) { 
+    arena_dealloc(gal->n_arena, gal->capacity); 
+}
 
-unordered_buffer _uob_init(size_t initial) {
+unordered_buffer _uob_init(int n_arena, size_t initial) {
     unordered_buffer uob = {0};
-    uob.data = calloc(1, initial);
+    uob.n_arena = n_arena;
+    uob.data = arena_alloc(n_arena, initial);
     uob.cur = 0;
     uob.capacity = initial;
     return uob;
@@ -277,11 +284,13 @@ unordered_buffer _uob_init(size_t initial) {
 
 void _uob_append(unordered_buffer* uob, void* src, size_t sz) {
     if (uob->cur + sz >= uob->capacity) {
-        uob->data = realloc(uob->data, 2 * uob->capacity);
+        arena_alloc(uob->n_arena, uob->capacity);
         uob->capacity *= 2;
     }
     memcpy(uob->data + uob->cur, src, sz);
     uob->cur += sz;
 }
 
-void _uob_free(unordered_buffer* uob) { free(uob->data); }
+void _uob_free(unordered_buffer* uob) { 
+    arena_dealloc(uob->n_arena, uob->capacity); 
+}

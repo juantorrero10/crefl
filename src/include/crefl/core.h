@@ -14,7 +14,7 @@ const char* refl_enum_get_label(REnum* type, int val);
 RStruct* refl_fetch_struct(const char* name);
 RUnion* refl_fetch_union(const char* name);
 RObject refl_get_field_value(RStruct* st, RObject instance, int idx);
-RField* refl_field_by_name(RStruct* s, const char* name);
+RField* refl_field_by_name(RStruct* s, const char* name, int* opt_out_idx);
 int refl_enum_has_label(REnum* e, const char* lbl);
 size_t refl_prim_to_size(RPrimitive p);
 size_t refl_get_field_size(RField* f);

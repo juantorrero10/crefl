@@ -57,11 +57,15 @@ size_t refl_prim_to_size(RPrimitive p) {
 }
 
 
-RField* refl_field_by_name(RStruct* s, const char* name) {
+RField* refl_field_by_name(RStruct* s, const char* name, int* opt_out_idx) {
     for (size_t i = 0; i < s->n_elements; i++)
     {
-        if (strcmp(name, s->fields[i]->name) == 0) return s->fields[i];
+        if (strcmp(name, s->fields[i]->name) == 0) { 
+            if (opt_out_idx != NULL) *opt_out_idx = i;
+            return s->fields[i]; 
+        }
     }
+    if (opt_out_idx != NULL) *opt_out_idx = -1;
     return NULL;
 }
 

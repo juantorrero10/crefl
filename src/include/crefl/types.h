@@ -63,6 +63,10 @@ typedef struct _CREFL_FIELD_{
 
 typedef void* RObject;
 
+typedef struct {
+    RStruct* type;
+    void* instance;
+} _RObject;
 
 // Data wrappers for defining uses cases for a pointer
 // These will be generated into K_OPTION and K_DYN_ARRAY

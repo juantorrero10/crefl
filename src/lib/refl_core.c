@@ -3,16 +3,20 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 
 #include <crefl/core.h>
+#include <crefl/types.h>
 #include <_fetched.h>
+#include <_arena.h>
 
 refl_st_hashmap_t G_REFL_STRUCTS = { 0 };
 refl_un_hashmap_t G_REFL_UNIONS = { 0 };
 refl_en_hashmap_t G_REFL_ENUMS = { 0 };
 refl_fi_array_t G_REFL_FIELDS = { 0 };
 char* G_STRING_POOL = NULL;
+
 
 
 
@@ -76,14 +80,14 @@ RUnion* refl_fetch_union(const char* name) {
 
 void refl_set_field(RStruct* s, const char* field_name, RObject instance, void* buff) {
     if (!s || !field_name || !buff || !instance ) return;
-    RField* f = refl_field_by_name(s, field_name);
+    RField* f = refl_field_by_name(s, field_name, NULL);
     if (!f) return;
     memcpy((uint8_t*)instance + f->offset, buff, refl_get_field_size(f));
 }
 
 RObject refl_get_field(RStruct* s, const char* field_name, RObject instance) {
     if (!s || !field_name || !instance ) return NULL;
-    RField* f = refl_field_by_name(s, field_name);
+    RField* f = refl_field_by_name(s, field_name, NULL);
     if (!f) return f;
     size_t sz = refl_get_field_size(f);
     void* ret = calloc(1, sz);
@@ -243,4 +247,13 @@ void refl_generic_destructor(RStruct* t, RObject instance) {
         __field_generic_destructor(f, instance + f->offset);
     }
     free(instance);
+}
+
+
+_RObject refl_generic_constructor(RStruct* t, ...) {
+    va_list params;
+    va_start(params, t);
+
+    va_end(params);
+    return (_RObject){.type = t, .instance = NULL};
 }

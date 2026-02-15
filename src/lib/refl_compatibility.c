@@ -10,6 +10,7 @@
 #include <crefl/types.h>
 #include <crefl/cmp.h>
 
+
 static int refl_primitive_can_promote(RPrimitive a, RPrimitive b);
 
 // Compatibily by label subset
@@ -75,7 +76,7 @@ int refl_comp_struct_subset(RStruct* tiny, RStruct* large) {
     {
         RField* f = tiny->fields[i];
         if (f->kind == K_OPTION) continue;
-        RField* from_b = refl_field_by_name(large, f->name);
+        RField* from_b = refl_field_by_name(large, f->name, NULL);
         if (!from_b) return 0;
         if (!refl_comp_field_nametype(f, from_b)) return 0;
     }
@@ -116,11 +117,15 @@ static int refl_comp_field_schema(RField* g, RField* m) {
 }
 
 int refl_comp_struct_schema(RStruct* generated, RStruct* model) {
+    if (!generated ^ !model) return 0;
+    if (!generated) return 1;
     for (size_t i = 0; i < model->n_elements; i++)
     {
         RField* m = model->fields[i];
-        RField* g = refl_field_by_name(generated, m->name);
-        if (!refl_comp_field_schema(g, m)) return 0;
+        RField* g = refl_field_by_name(generated, m->name, NULL);
+        if (!refl_comp_field_schema(g, m)) { 
+            return 0; 
+        }
     }
     return 1;
 }
@@ -496,7 +501,7 @@ RObject refl_struct_migrate(RStruct* old, RStruct* new, RObject instance) {
 
     for (size_t i = 0; i < old->n_elements; i++) {
         RField* f_old = old->fields[i];
-        RField* f_new = refl_field_by_name(new, f_old->name);
+        RField* f_new = refl_field_by_name(new, f_old->name, NULL);
         if (!f_new) continue;
 
         uint8_t* src = (uint8_t*)instance + f_old->offset;

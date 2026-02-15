@@ -8,7 +8,7 @@ OBJ_DIR = build/obj
 BIN_DIR = build/bin
 
 CRELF_FILE = generated_types.crefl
-PY_GEN    = python3 crefl_gen/main.py
+PY_GEN    = python3 crefl_gen
 PY_INPUT  = $(shell find src -name "*.h") $(shell find src -name "*.c")
 
 # --- Source Discovery ---
@@ -26,6 +26,9 @@ BIN = $(BIN_DIR)/$(TARGET)
 # --- Rules ---
 
 all: $(BIN)
+
+release: CFLAGS := $(filter-out -g,$(CFLAGS)) -O2
+release: all
 
 $(BIN): $(OBJ) | $(BIN_DIR)
 	@echo "Linking -> $@"
@@ -56,4 +59,4 @@ clean:
 	rm -rf build
 	rm generated_types.crefl
 
-.PHONY: all clean run
+.PHONY: all clean run release

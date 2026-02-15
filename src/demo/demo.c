@@ -12,7 +12,8 @@
 "{"\
 "    \"string\" : \"Some string\","\
 "    \"id\" : 400000000,"\
-"    \"f\" : 3.5"\
+"    \"f\" : 3.29500007,"\
+"    \"boolean\" : true"\
 "}"
 
 #pragma GCC diagnostic push
@@ -24,7 +25,8 @@
 REFLECT(struct) {
     const char* string;
     uint32_t id;
-    float f;
+    double f;
+    bool boolean;
 } ds_test_t;
 
 int main() {

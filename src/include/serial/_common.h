@@ -47,6 +47,7 @@ typedef struct {
 typedef struct {
     RField* f;
     size_t sz;
+    int n_arena;
     size_t capacity;
 } temp_field_pool;
 
@@ -54,22 +55,24 @@ typedef struct {
     void* data;
     size_t chunk_size;
     size_t size;
+    int n_arena;
     size_t capacity;
 } g_arraylist_t;
 
 typedef struct {
     uint8_t* data;
     size_t cur;
+    int n_arena;
     size_t capacity;
 } unordered_buffer;
 
-temp_field_pool _fp_init(size_t initial);
+temp_field_pool _fp_init(int n_arena, size_t initial);
 void _fp_append(temp_field_pool* fp, RField* f);
 void _fp_free(temp_field_pool* fp);
-g_arraylist_t _gal_init(size_t initial, size_t chunk_size);
+g_arraylist_t _gal_init(int n_arena, size_t initial, size_t chunk_size);
 void _gal_append(g_arraylist_t* gal, void* object);
 void _gal_free(g_arraylist_t* gal);
-unordered_buffer _uob_init(size_t initial);
+unordered_buffer _uob_init(int n_arena, size_t initial);
 void _uob_append(unordered_buffer* uob, void* src, size_t sz); 
 void _uob_free(unordered_buffer* uob);
 

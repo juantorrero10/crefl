@@ -12,6 +12,7 @@
 
 #include <serial/_common.h>
 #include <serial/err.h>
+#include <_arena.h>
 
 
 
@@ -225,7 +226,7 @@ static DeserializeResult __ds_obj(
     struct _json_nesting_stack* jss, 
     unordered_buffer* instance
 ) {
-    temp_field_pool fp = _fp_init(FIELD_POOL_INITIAL);
+    temp_field_pool fp = _fp_init(arena_create_partition(12 * jw->eof), FIELD_POOL_INITIAL);
     size_t substr_start=(size_t)-1;
     int scaped=0;           // scaping chars like \" \n \t
     int expecting_more=0;   // last field ended with ',' -> we expect more fields
@@ -382,17 +383,17 @@ finish_field:
         continue;
 
 return_err:
-        _fp_free(&fp);
+        arena_delete_partitions(1);
         return RET_ERR(de);
     }
 
     // Final syntax checks
     if (jss->overflown != 0) {
-        _fp_free(&fp);
+        arena_delete_partitions(1);
         return RET_ERR(DE_TOO_MUCH_NESTING);
     }
     if (jss->sp != 0) { 
-        _fp_free(&fp);
+        arena_delete_partitions(1);
         return RET_ERR(DE_UNBALANCED_STREAM);
     }
 
@@ -401,7 +402,7 @@ return_err:
         .n_elements = n_elements,
         .name_type = "placeholder",
         .total_size = curr_offset,
-        .fields = calloc(sizeof(RField*), fp.sz)
+        .fields = arena_alloc(0, sizeof(RField*) * n_elements)
     };
     for (size_t i = 0; i < n_elements; i++)
     {   
@@ -410,13 +411,11 @@ return_err:
 
     // Check compatibilty and migrate
     if (refl_comp_struct_schema(&generated, st) == 0) {
-        _fp_free(&fp);
-        free(generated.fields);
+        arena_delete_partitions(1);
         return RET_ERR(DE_STREAM_INCOMPATIBLE);
     }
     uint8_t* result = refl_struct_migrate(&generated, st, instance->data);
-    _fp_free(&fp);
-    free(generated.fields);
+    arena_delete_partitions(1);
     return RET_OK(result);
 }
 
@@ -428,12 +427,12 @@ return_err:
 DeserializeResult deserialize_json(RStruct* model, void* stream) {
     if (!model) return RET_ERR(DE_NULL_PTR);
     json_walker jw = { .cur = 0, .eof = strlen((char*)stream) };
-    jw.buff = calloc(1, jw.eof + 1);
+    jw.buff = arena_alloc(0, jw.eof + 1);
     memcpy(jw.buff, stream, jw.eof + 1);
     struct _json_nesting_stack jss = {.stack = {0}, .overflown = 0, .sp = 0};
 
     DeserializeResult ret = { 0 };
-    unordered_buffer instance = _uob_init(INSTANCE_INITIAL);
+    unordered_buffer instance = _uob_init(arena_create_partition(jw.eof), INSTANCE_INITIAL);
     while(jw.cur < jw.eof)
     {
         char c = jw.buff[jw.cur];
@@ -445,12 +444,14 @@ DeserializeResult deserialize_json(RStruct* model, void* stream) {
             break;
         } else {
             _uob_free(&instance);
-            free(jw.buff);
+            arena_delete_partitions(1);
+            arena_dealloc(0, jw.eof);
             return RET_ERR(DE_STREAM_INCOMPATIBLE);
         }
         jw.cur++;
     }
     _uob_free(&instance);
-    free(jw.buff);
+    arena_delete_partitions(1);
+    arena_dealloc(0, jw.eof);
     return ret;
 }
