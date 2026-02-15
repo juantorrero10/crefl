@@ -98,6 +98,7 @@ static int refl_comp_field_schema(RField* g, RField* m) {
     switch (m->kind)
     {
     case K_PRIMITIVE:
+        if (g->subtype.prim == P_U0) return 1;
         return refl_primitive_can_promote(g->subtype.prim, m->subtype.prim);
     case K_STRUCT:
         return refl_comp_struct_schema(g->subtype.s, m->subtype.s);
@@ -268,6 +269,8 @@ static void migrate_array(
 
     RField* e_old = f_old->subtype.subfield;
     RField* e_new = f_new->subtype.subfield;
+
+    if (e_old->kind == K_PRIMITIVE && e_old->subtype.prim == P_U0) return;
 
     size_t count = old_len < new_len ? old_len : new_len;
 

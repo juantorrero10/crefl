@@ -11,9 +11,10 @@ typedef struct {
     uint8_t* arena;
     size_t brk;
     size_t capacity;
+    size_t robbing;
 } scratch_arena_partition;
 
-typedef struct _CREFL_Arena_ {
+typedef struct {
     uint8_t* arena;
     size_t brk;
     size_t capacity;
@@ -31,6 +32,8 @@ typedef struct _CREFL_Arena_ {
 
 __TLS scratch_arena g_scratch_arena = {0};
 __TLS int g_scratch_memory_failed = 0;
+
+#define GA g_scratch_arena
 
 static void __free_arena() { munmap(g_scratch_arena.arena, g_scratch_arena.capacity); }
 
@@ -73,6 +76,7 @@ void* arena_alloc(int n, size_t sz) {
     }
 }
 
+
 void arena_dealloc(int n, size_t sz) {
     if (n == 0) {
         if (g_scratch_arena.num_partitions > 0) {
@@ -83,7 +87,7 @@ void arena_dealloc(int n, size_t sz) {
                     g_scratch_memory_failed = 1;
                 }
         }
-        g_scratch_arena.brk -= sz; 
+        g_scratch_arena.brk -= sz;
     } else {
         assert(g_scratch_arena.num_partitions >= (size_t)n);
         scratch_arena_partition* arena = &g_scratch_arena.partitions[n-1];
@@ -103,12 +107,14 @@ int arena_create_partition(size_t size) {
     g_scratch_arena.partitions[n] = (scratch_arena_partition){
         .arena = as,
         .brk = 0,
-        .capacity = cap
+        .capacity = cap,
+        .robbing = 0
     };
     g_scratch_arena.brk += cap;
     g_scratch_arena.num_partitions++;
     return n + 1;
 }
+
 
 /**
  * @attention pushes brk back to before the partitions.
@@ -127,6 +133,45 @@ int arena_memory_failed() {
     return b;
 }
 
+void arena_last_parition_grow(size_t sz) {
+    scratch_arena_partition* target = &GA.partitions[GA.num_partitions-1];
+    assert((target->arena + target->capacity) >= (GA.arena + GA.brk));
+    assert(GA.brk + sz > GA.capacity);
+    target->capacity += MAX(16, sz & ~0xF);
+    GA.brk += sz;
+}
+
+int arena_rob_partition(int n_partition, size_t sz) {
+    size_t n = GA.num_partitions;
+    assert(n > n_partition);
+    sz &= ~0xF;
+    scratch_arena_partition* og = &GA.partitions[n_partition];
+    sz = MIN(og->capacity - 16, MAX(16, sz));
+    og->capacity -= sz;
+    uint8_t* as = og->arena - sz;
+    GA.partitions[n] = (scratch_arena_partition){
+        .arena = as,
+        .brk = 0,
+        .capacity = sz,
+        .robbing = n_partition
+    };
+    GA.num_partitions++;
+    return GA.num_partitions - 1;
+}
+
+void arena_rob_restore(int n_robber) {
+    scratch_arena_partition* robber = &GA.partitions[n_robber];
+    assert(robber->robbing != 0);
+    scratch_arena_partition* robbed = &GA.partitions[robber->robbing];
+    robbed->capacity += robber->capacity;
+    GA.num_partitions--;
+}
+
+size_t arena_get_brk() { return g_scratch_arena.brk; }
+void arena_set_brk(size_t brk) { 
+    g_scratch_arena.brk = brk;
+}
+#define __VARENA__
 #ifdef __VARENA__
 
 #define COLOR_BRIGHT_RED     "\033[91m"

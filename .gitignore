@@ -2,4 +2,5 @@ build
 crefl_gen/__pycache__
 generator/__temp__crefl
 generated_types.crefl
+test.json
 .vscode
