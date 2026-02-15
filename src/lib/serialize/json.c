@@ -241,7 +241,7 @@ typedef struct {
 /**
  * We are expected to be at [ elem1, elem2, elem3, ... ]
  *                          ^ HERE
- */
+ *//*
 static _dal_results __ds_array_lookeahead(
     json_walker* jw,
     struct _json_nesting_stack* jss
@@ -387,7 +387,7 @@ static DeserializeResult __ds_val(
         jw->cur++;
     }
     de = DE_UNCLOSED_DQUOTE; goto return_err;
-}
+}*/
 
 
 /**

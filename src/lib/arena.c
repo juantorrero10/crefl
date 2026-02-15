@@ -143,7 +143,7 @@ void arena_last_parition_grow(size_t sz) {
 
 int arena_rob_partition(int n_partition, size_t sz) {
     size_t n = GA.num_partitions;
-    assert(n > n_partition);
+    assert(n > (size_t)n_partition);
     sz &= ~0xF;
     scratch_arena_partition* og = &GA.partitions[n_partition];
     sz = MIN(og->capacity - 16, MAX(16, sz));
