@@ -23,10 +23,10 @@
 
 
 REFLECT(struct) {
-    const char* string;
     uint32_t id;
+    const char* string;
+    OPTION(bool) boolean;
     double f;
-    bool boolean;
 } ds_test_t;
 
 int main() {

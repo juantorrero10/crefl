@@ -13,6 +13,7 @@ void* arena_alloc(int n, size_t sz);
 void arena_dealloc(int n, size_t sz);
 int arena_create_partition(size_t size);
 void arena_delete_partitions(int amount);
-void visualize_arena();
+int arena_memory_failed();
+//void visualize_arena();
 
 #endif // _ARENA_H_

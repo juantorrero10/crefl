@@ -30,6 +30,7 @@ typedef struct _CREFL_Arena_ {
 #define MAX_PARTITIONS 64
 
 __TLS scratch_arena g_scratch_arena = {0};
+__TLS int g_scratch_memory_failed = 0;
 
 static void __free_arena() { munmap(g_scratch_arena.arena, g_scratch_arena.capacity); }
 
@@ -50,8 +51,11 @@ void* arena_alloc(int n, size_t sz) {
     if (n == 0) { 
         void* ret = g_scratch_arena.arena + g_scratch_arena.brk;
         memset(ret, 0, sz);
+        if (g_scratch_arena.brk + sz > g_scratch_arena.capacity) {
+            g_scratch_memory_failed = 1;
+            return g_scratch_arena.arena + g_scratch_arena.capacity - g_scratch_arena.brk;
+        }
         g_scratch_arena.brk += sz;
-        assert(g_scratch_arena.brk <= g_scratch_arena.capacity);
         return ret;
 
     }
@@ -61,7 +65,10 @@ void* arena_alloc(int n, size_t sz) {
         void* ret = arena->arena + arena->brk;
         memset(ret, 0, sz);
         arena->brk += sz;
-        assert(arena->brk < arena->capacity);
+        if (arena->brk >= arena->capacity) {
+            g_scratch_memory_failed = 1;
+            return arena->arena + arena->capacity - arena->brk;
+        }
         return ret;
     }
 }
@@ -70,9 +77,11 @@ void arena_dealloc(int n, size_t sz) {
     if (n == 0) {
         if (g_scratch_arena.num_partitions > 0) {
             scratch_arena_partition* a = &g_scratch_arena.partitions[g_scratch_arena.num_partitions - 1]; 
-            assert(
+            if(
                 g_scratch_arena.arena + (g_scratch_arena.brk) - sz > 
-                a->arena + a->capacity);
+                a->arena + a->capacity) {
+                    g_scratch_memory_failed = 1;
+                }
         }
         g_scratch_arena.brk -= sz; 
     } else {
@@ -81,6 +90,7 @@ void arena_dealloc(int n, size_t sz) {
         arena->brk -= sz;
     } 
 }
+
 
 int arena_create_partition(size_t size) {
     size_t n = g_scratch_arena.num_partitions;
@@ -110,6 +120,13 @@ void arena_delete_partitions(int amount) {
     g_scratch_arena.brk = g_scratch_arena.partitions[i].arena - g_scratch_arena.arena;
     g_scratch_arena.num_partitions -= amount;
 }
+
+int arena_memory_failed() {
+    int b = g_scratch_memory_failed;
+    g_scratch_memory_failed = 0;
+    return b;
+}
+
 #ifdef __VARENA__
 
 #define COLOR_BRIGHT_RED     "\033[91m"

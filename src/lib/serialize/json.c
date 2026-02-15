@@ -371,6 +371,7 @@ finish_field:
         while (skip_chars(currchar)) jw->cur++;
         n_elements++;
         _fp_append(&fp, &curr);
+        if (arena_memory_failed()) { de = DE_MEMORY_ERROR; goto return_err;}
         if (currchar == '}') {
             continue;
         }
@@ -385,6 +386,11 @@ finish_field:
 return_err:
         arena_delete_partitions(1);
         return RET_ERR(de);
+    }
+
+    if (arena_memory_failed()) {
+        arena_create_partition(1);
+        return RET_ERR(DE_MEMORY_ERROR);
     }
 
     // Final syntax checks
