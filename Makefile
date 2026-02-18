@@ -1,62 +1,98 @@
-TARGET = crefl_demo
-CC = gcc
-CFLAGS = -Wall -Wextra -Werror -std=c17 -Isrc/include -g -m64 -MMD -MP
+TARGET      = crefl
+CC          = gcc
 
-SRC_DIR = src
-DEMO_DIR = demo
-OBJ_DIR = build/obj
-BIN_DIR = build/bin
+BASE_CFLAGS = -Wall -Wextra -Werror -std=c17 -Isrc/include -m64 -MMD -MP -O2
+CFLAGS      = $(BASE_CFLAGS) -fPIC
+AR          = ar
+ARFLAGS     = rcs
 
-CRELF_FILE = generated_types.crefl
-PY_GEN    = python3 crefl_gen
-PY_INPUT  = $(shell find src -name "*.h") $(shell find src -name "*.c")
+SRC_DIR     = src
+DEMO_DIR    = src/demo
+OBJ_DIR     = build/obj
+BIN_DIR     = build/bin
+LIB_DIR     = build/lib
 
-# --- Source Discovery ---
-# This looks for ALL .c files in your src directory automatically.
-# If you prefer manual listing, ensure the path matches the folder exactly.
-C_FILES := $(shell find $(SRC_DIR) -name "*.c")
+CRELF_FILE  = generated_types.crefl
+PY_GEN      = python3 crefl_gen
+PY_INPUT    = $(shell find src -name "*.h") $(shell find src -name "*.c")
 
-# --- Object Mapping ---
-# This takes src/folder/file.c and turns it into build/obj/folder/file.o
-OBJ   := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(C_FILES))
-DEPS  := $(OBJ:.o=.d)
+# --- Source discovery (exclude demo) ---
+C_FILES := $(shell find $(SRC_DIR) -name "*.c" ! -path "$(DEMO_DIR)/*")
+OBJ     := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(C_FILES))
+DEPS    := $(OBJ:.o=.d)
 
-BIN = $(BIN_DIR)/$(TARGET)
+# --- Demo sources ---
+DEMO_C_FILES := $(shell find $(DEMO_DIR) -name "*.c")
+DEMO_OBJ     := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(DEMO_C_FILES))
+DEMO_BIN     := $(BIN_DIR)/crefl_demo
 
-# --- Rules ---
+# --- Library outputs ---
+SHARED_LIB = $(LIB_DIR)/lib$(TARGET).so
+STATIC_LIB = $(LIB_DIR)/lib$(TARGET).a
 
-all: $(BIN)
+# =========================================================
+# Default target -> shared library
+# =========================================================
+all: $(SHARED_LIB)
 
-release: CFLAGS := $(filter-out -g,$(CFLAGS)) -O2
-release: all
+# =========================================================
+# Shared library
+# =========================================================
+$(SHARED_LIB): $(OBJ) | $(LIB_DIR)
+	@echo "Linking shared library -> $@"
+	$(CC) -shared -o $@ $(OBJ)
 
-$(BIN): $(OBJ) | $(BIN_DIR)
-	@echo "Linking -> $@"
-	$(CC) $(CFLAGS) -o $@ $(OBJ)
+# =========================================================
+# Static library
+# =========================================================
+static: $(STATIC_LIB)
 
+$(STATIC_LIB): $(OBJ) | $(LIB_DIR)
+	@echo "Creating static library -> $@"
+	$(AR) $(ARFLAGS) $@ $(OBJ)
+
+# =========================================================
+# Reflection generation (ONLY used by demo)
+# =========================================================
 $(CRELF_FILE): $(PY_INPUT)
-	@mkdir -p $(dir $@)
 	@echo "Generating reflection -> $@"
 	$(PY_GEN) -i $(PY_INPUT) -o $@
 
-# Rule for C files
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(CRELF_FILE)
+# =========================================================
+# Object compilation
+# =========================================================
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
 	@echo "Compiling -> $<"
-	$(CC) $(CFLAGS) -c $< -o $@ -DCREFL_FILE=\"$(CRELF_FILE)\"
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(DEMO_BIN): CFLAGS += -DCREFL_FILE=\"$(CRELF_FILE)\"
+$(DEMO_BIN): $(CRELF_FILE) $(DEMO_OBJ) $(SHARED_LIB) | $(BIN_DIR)
+	@echo "Linking demo -> $@"
+	$(CC) $(BASE_CFLAGS) -o $@ $(DEMO_OBJ) \
+		-L$(LIB_DIR) -l$(TARGET) \
+		-Wl,-rpath,$(LIB_DIR)
+
+# =========================================================
+# Run demo
+# =========================================================
+run_demo: $(DEMO_BIN)
+	@echo "Running demo..."
+	@$(DEMO_BIN)
+
+# =========================================================
+# Directories
+# =========================================================
+$(BIN_DIR) $(LIB_DIR):
+	@mkdir -p $@
+
+# =========================================================
+# Clean
+# =========================================================
+clean:
+	rm -rf build
+	rm -f $(CRELF_FILE)
 
 -include $(DEPS)
 
-$(BIN_DIR):
-	@mkdir -p $@
-
-# --- Run ---
-run: all
-	@echo "Running $(TARGET)..."
-	@./$(BIN)
-
-clean:
-	rm -rf build
-	rm generated_types.crefl
-
-.PHONY: all clean run release
+.PHONY: all static clean run_demo

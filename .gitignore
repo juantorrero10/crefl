@@ -4,4 +4,5 @@ generator/__temp__crefl
 generated_types.crefl
 test.json
 src/demo
+_old_Makefile
 .vscode

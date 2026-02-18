@@ -271,7 +271,7 @@ static DeserializeResult _json_dsval(
     size_t substr_start;
     uint64_t raw;           // Raw bytes output from numerical types
     uint8_t bool_val = 0;
-    bool scaped;            // scaping chars like \" \n \t
+    bool scaped=0;          // scaping chars like \" \n \t
     bool wrapped_dst = model->kind == K_OPTION;
     if (!wrapped_dst && non_optional_counter) (*non_optional_counter)++;
     uint8_t* dst = instance->data + offset + model->offset;
