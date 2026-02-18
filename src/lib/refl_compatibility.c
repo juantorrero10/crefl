@@ -11,6 +11,15 @@
 #include <crefl/cmp.h>
 
 
+#if defined(__GNUC__)
+#   define __TLS __thread
+#else
+#   define __TLS _Thread_local
+#endif
+
+__TLS size_t _g_migrate_sized_string = (size_t)-1;
+
+
 static int refl_primitive_can_promote(RPrimitive a, RPrimitive b);
 
 // Compatibily by label subset
@@ -86,7 +95,7 @@ int refl_comp_struct_subset(RStruct* tiny, RStruct* large) {
 
 int refl_comp_struct_schema(RStruct* generated,  RStruct* model);
 
-static int refl_comp_field_schema(RField* g, RField* m) {
+int refl_comp_field_schema(RField* g, RField* m) {
     if (m->kind == K_OPTION) {
         if (!g) return 1;
         if (g->kind == K_OPTION) return 0;
@@ -339,7 +348,7 @@ static void migrate_array(
 }
 
 
-static void refl_migrate_field(
+void refl_migrate_field(
     RField* f_old,
     RField* f_new,
     uint8_t* src,
@@ -364,7 +373,12 @@ static void refl_migrate_field(
         return;
 
     case K_STRING:
-        *(char**)dst = strdup(*(char**)src);
+        if (_g_migrate_sized_string == (size_t)-1) {
+            *(char**)dst = strdup(*(char**)src);
+        } else {
+            *(char**)dst = malloc(_g_migrate_sized_string);
+            memcpy(*(char**)dst, *(char**)src, _g_migrate_sized_string);
+        }
         return;
 
     case K_ENUM:

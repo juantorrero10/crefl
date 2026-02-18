@@ -269,6 +269,7 @@ void _gal_append(g_arraylist_t* gal, void* object) {
     memcpy(&((uint8_t*)gal->data)[gal->size++ * gal->chunk_size], object, gal->chunk_size);
 }
 
+
 void _gal_empty(g_arraylist_t* gal) { gal->size = 0; }
 
 void _gal_free(g_arraylist_t* gal) { 
@@ -284,14 +285,20 @@ unordered_buffer _uob_init(int n_arena, size_t initial) {
     return uob;
 }
 
-void _uob_append(unordered_buffer* uob, void* src, size_t sz) {
+void _uob_expand(unordered_buffer* uob, size_t sz) {
     if (uob->cur + sz >= uob->capacity) {
         arena_alloc(uob->n_arena, uob->capacity);
         uob->capacity *= 2;
     }
+}
+
+void _uob_append(unordered_buffer* uob, void* src, size_t sz) {
+    _uob_expand(uob, sz);
     memcpy(uob->data + uob->cur, src, sz);
     uob->cur += sz;
 }
+
+
 
 void _uob_free(unordered_buffer* uob) { 
     arena_dealloc(uob->n_arena, uob->capacity); 

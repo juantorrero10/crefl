@@ -12,7 +12,8 @@ typedef enum {
     DE_UNCLOSED_DQUOTE,
     DE_NUMBER_CONVERSION_ERROR,
     DE_MEMORY_ERROR,
-    DE_UNKNOWN_KEYWORD
+    DE_UNKNOWN_KEYWORD,
+    DE_BITMAP_OVERFLOWN
 } DeserializeError;
 
 typedef struct {

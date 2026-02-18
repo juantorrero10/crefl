@@ -29,6 +29,8 @@ char* deserialize_strerror(DeserializeError e) {
         return "Deserialization couldn't be completed due to a memory error.";
     case DE_UNKNOWN_KEYWORD:
         return "Stream contained an unregistered keyword.";
+    case DE_BITMAP_OVERFLOWN:
+        return "Stream contained too many fields.";
     default:
         return "";
     }

@@ -76,6 +76,7 @@ void _gal_empty(g_arraylist_t* gal);
 unordered_buffer _uob_init(int n_arena, size_t initial);
 void _uob_append(unordered_buffer* uob, void* src, size_t sz); 
 void _uob_free(unordered_buffer* uob);
+void _uob_expand(unordered_buffer* uob, size_t sz);
 
 typedef union {
     void* ptr;
