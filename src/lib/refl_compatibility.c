@@ -17,8 +17,6 @@
 #   define __TLS _Thread_local
 #endif
 
-__TLS size_t _g_migrate_sized_string = (size_t)-1;
-
 
 static int refl_primitive_can_promote(RPrimitive a, RPrimitive b);
 
@@ -207,6 +205,11 @@ static int refl_primitive_can_promote(RPrimitive a, RPrimitive b) {
     if ((a == P_F32 && b == P_F64))
         return 1;
 
+    // Bool -> any other, not void
+    if ((a == P_BOOL && b != P_U0)) {
+        return 1;
+    }
+
     return 0;
 }
 
@@ -373,12 +376,7 @@ void refl_migrate_field(
         return;
 
     case K_STRING:
-        if (_g_migrate_sized_string == (size_t)-1) {
-            *(char**)dst = strdup(*(char**)src);
-        } else {
-            *(char**)dst = malloc(_g_migrate_sized_string);
-            memcpy(*(char**)dst, *(char**)src, _g_migrate_sized_string);
-        }
+        *(char**)dst = strdup(*(char**)src);
         return;
 
     case K_ENUM:

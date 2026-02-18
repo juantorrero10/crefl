@@ -51,8 +51,8 @@ void arena_init(size_t initial_cap) {
 }
 
 void* arena_alloc(int n, size_t sz) {
+    if (sz == 0) return g_scratch_arena.arena + g_scratch_arena.brk;
     if (n == 0) {
-        printf("+ %zu bytes\n", sz);
         void* ret = g_scratch_arena.arena + g_scratch_arena.brk;
         memset(ret, 0, sz);
         if (g_scratch_arena.brk + sz > g_scratch_arena.capacity) {
@@ -80,7 +80,6 @@ void* arena_alloc(int n, size_t sz) {
 
 void arena_dealloc(int n, size_t sz) {
     if (n == 0) {
-        printf("- %zu bytes\n", sz);
         if (g_scratch_arena.num_partitions > 0) {
             scratch_arena_partition* a = &g_scratch_arena.partitions[g_scratch_arena.num_partitions - 1]; 
             if(

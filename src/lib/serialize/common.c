@@ -287,8 +287,8 @@ unordered_buffer _uob_init(int n_arena, size_t initial) {
 
 void _uob_expand(unordered_buffer* uob, size_t sz) {
     if (uob->cur + sz >= uob->capacity) {
-        arena_alloc(uob->n_arena, uob->capacity);
-        uob->capacity *= 2;
+        arena_alloc(uob->n_arena, sz);
+        uob->capacity += sz;
     }
 }
 

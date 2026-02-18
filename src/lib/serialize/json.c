@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #include <crefl/types.h>
 #include <crefl/cmp.h>
@@ -15,7 +16,6 @@
 #include <serial/err.h>
 #include <_arena.h>
 
-extern __TLS size_t _g_migrate_sized_string;
 
 char* deserialize_strerror(DeserializeError e);
 
@@ -158,6 +158,7 @@ static int _json_str_to_numeric(
     if (cur < eof && (
         buff[cur] == 'e' || buff[cur] == 'E'
     )) {
+        is_float = 1;
         cur++;
         while(cur < eof && isdigit(buff[cur])) cur++;
     }
@@ -176,16 +177,19 @@ static int _json_str_to_numeric(
         // Return P_F32 if lossless
         if (f == d) {
             *out_prim_kind = P_F32;
+            memset(out_bytes, 0, sizeof(uint64_t));
             memcpy(out_bytes, &f, sizeof(float));
         } else {
             *out_prim_kind = P_F64;
+            memset(out_bytes, 0, sizeof(uint64_t));
             memcpy(out_bytes, &d, sizeof(double));
         }
     } else if (sign_bit) {
         int64_t v = strtol((char*)extracted, NULL, 10);
         if (errno) return 0;
         *out_prim_kind = _smallest_primitive_type_signed(v, &s);
-        memcpy(&out_bytes, &v, s);
+        memset(out_bytes, 0, sizeof(uint64_t));
+        memcpy(out_bytes, &v, s);
     } else {
         uint64_t v = strtoul((char*)extracted, NULL, 10);
         if (errno) return 0;
@@ -240,6 +244,15 @@ static DeserializeResult _json_dsobj(
     RStruct* model,
     json_walker* jw, 
     struct _json_nesting_stack* jss,
+    size_t offset,
+    unordered_buffer* instance
+);
+
+static DeserializeResult _json_dsarr(
+    RField* array,
+    json_walker* jw, 
+    struct _json_nesting_stack* jss,
+    size_t offset,
     unordered_buffer* instance
 );
 
@@ -247,6 +260,7 @@ static DeserializeResult _json_dsval(
     RField* model,
     json_walker* jw,
     struct _json_nesting_stack* jss,
+    size_t offset,
     unordered_buffer* instance,
     size_t* non_optional_counter
 ) {
@@ -259,9 +273,8 @@ static DeserializeResult _json_dsval(
     uint8_t bool_val = 0;
     bool scaped;            // scaping chars like \" \n \t
     bool wrapped_dst = model->kind == K_OPTION;
-    if (!wrapped_dst) (*non_optional_counter)++;
-    _uob_expand(instance, (model->next_offset - model->offset));
-    uint8_t* dst = instance->data + model->offset;
+    if (!wrapped_dst && non_optional_counter) (*non_optional_counter)++;
+    uint8_t* dst = instance->data + offset + model->offset;
     switch (currchar)
     {
     case '\"':
@@ -283,8 +296,11 @@ static DeserializeResult _json_dsval(
         } 
         return RET_ERR(DE_UNKNOWN_KEYWORD);
 
-    //case '{':
-    //    goto reading_struct;
+    case '{':
+        goto reading_struct;
+
+    case '[':
+        goto reading_array;
 
     default:
         if (num_detect(currchar)) {
@@ -294,30 +310,37 @@ static DeserializeResult _json_dsval(
         }
         break;
     }
-/*
+
+reading_array:
+    _jss_push(jss, 1);
+    jw->cur++;
+    {
+        if (model->kind != K_DYN_ARRAY && model->kind != K_FIXED_ARRAY) {
+            return RET_ERR(DE_STREAM_INCOMPATIBLE);
+        }
+        DeserializeResult dr = _json_dsarr(model, jw, jss, offset + model->offset, instance);
+        if (dr.st == DR_OK) {
+            jw->cur++;
+            goto finish_field;
+        }  else {
+            return RET_ERR(dr.err);
+        }
+    }
+
 reading_struct:
     _jss_push(jss, 0);
     jw->cur++;
     {
-        RField e = {0};
-        _fp_append(fp, &e);
-        curr = &fp->f[fp->sz - 1];
-        *write_at = fp->sz - 1;
-        DeserializeResult dr = _json_dsobj(jw, jss, instance, fp, type_data_partition);
+        if (model->kind != K_STRUCT) return RET_ERR(DE_STREAM_INCOMPATIBLE);
+        DeserializeResult dr = _json_dsobj(model->subtype.s, jw, jss, offset + model->offset, instance);
         if (dr.st == DR_OK) {
-            RStruct* s = ((RStruct*)dr.data.buff);
-            curr.kind = K_STRUCT;
-            curr.offset = *curr_offset;
-            *curr_offset += s->total_size;
-            curr.next_offset = *curr_offset;
-            curr.subtype.s = s;
             jw->cur++;
             goto finish_field;
         } else {
-            return dr;
+            return RET_ERR(dr.err);
         }
     }
-*/
+
 reading_bool:
     curr.kind = K_PRIMITIVE;
     curr.subtype.prim = P_BOOL;
@@ -358,9 +381,10 @@ reading_string:
             // Write pointer
             uint8_t* str = jw->buff + substr_start;
             jw->cur++;
-            _g_migrate_sized_string = str_len;
-            refl_migrate_field(&curr, model, (uint8_t*)&str, dst, 0, wrapped_dst);
-            _g_migrate_sized_string = (size_t)-1;
+            char* extracted = arena_alloc(0, str_len + 1);
+            memcpy(extracted, str, str_len);
+            refl_migrate_field(&curr, model, (uint8_t*)&extracted, dst, 0, wrapped_dst);
+            arena_dealloc(0, str_len + 1);
             goto finish_field;
         }
         // Actual scaping of characters will be handled later down the line.
@@ -377,6 +401,88 @@ finish_field:
 
 }
 
+/** 
+ * cursor expected at: [     1, 2, 3, ..., ]
+ *                      ^^^^
+ *                      SOMEWHERE HERE
+ */
+static DeserializeResult _json_dsarr(
+    RField* array,
+    json_walker* jw, 
+    struct _json_nesting_stack* jss,
+    size_t offset,
+    unordered_buffer* instance
+) {
+    while(skip_chars(currchar))jw->cur++;
+
+    // Handle empty arrays separately
+    if (currchar == ']') {
+        _jss_pop(jss, 1);
+        return RET_OK(NULL);
+    }
+
+    size_t sz =  refl_get_field_size(array->subtype.subfield);
+    size_t n_elements = 0;
+    uint8_t* arr_start = NULL;
+
+    
+
+    if (array->kind == K_DYN_ARRAY) {  
+        while (jw->cur < jw->eof) {
+            while(skip_chars(currchar))jw->cur++;
+            uint8_t* write_field_at = arena_alloc(0, sz);
+            if (!n_elements) arr_start = write_field_at;
+            n_elements++;
+            unordered_buffer fake_instance = {.data = write_field_at}; 
+            DeserializeResult dr = _json_dsval(
+                array->subtype.subfield, jw, jss, 
+                0, 
+                &fake_instance, NULL);
+            if (dr.st == DR_ERR) {
+                arena_dealloc(0, sz * n_elements);
+                return RET_ERR(dr.err);   
+            }
+            while(skip_chars(currchar))jw->cur++;
+            if (currchar == ',') { jw->cur++;continue;}
+            break;
+        }
+        if (currchar == ']') _jss_pop(jss, 1); 
+        r_array_t rarr = {.capacity = n_elements, .size = n_elements, .chunk_size = sz};
+        rarr.array = calloc(sz, n_elements);
+        memcpy(rarr.array, arr_start, sz * n_elements);
+        memcpy(instance->data + offset, &rarr, sizeof(r_array_t));
+        arena_dealloc(0, sz * n_elements);
+    } else {
+        while (jw->cur < jw->eof) {
+            while(skip_chars(currchar))jw->cur++;
+            unordered_buffer fake_instance = {
+                .data = instance->data + offset + (sz * n_elements)
+            };
+            DeserializeResult dr = _json_dsval(
+                array->subtype.subfield,
+                jw,
+                jss,
+                0,
+                &fake_instance,
+                NULL
+            );
+            n_elements++;
+            if (dr.st == DR_ERR) {
+                arena_dealloc(0, sz * n_elements);
+                return RET_ERR(dr.err);   
+            }
+            while(skip_chars(currchar))jw->cur++;
+            if (currchar == ',') { jw->cur++;continue;}
+            break;
+        }
+        if (currchar == ']') _jss_pop(jss, 1);
+    }
+
+    return RET_OK(NULL);
+
+    
+}
+
 
 /**
  * @brief State machine deserialization of a JSON object.
@@ -385,6 +491,7 @@ static DeserializeResult _json_dsobj(
     RStruct* model,
     json_walker* jw, 
     struct _json_nesting_stack* jss,
+    size_t offset,
     unordered_buffer* instance
 ) {
     size_t substr_start=(size_t)-1;
@@ -437,7 +544,7 @@ reading_value:
             de = DE_UNEXPECTED_CHARACTER; goto return_err;}
         jw->cur++;
         while (skip_chars(currchar)) jw->cur++;
-        DeserializeResult dr = _json_dsval(model_curr, jw, jss, instance, &non_optinal_counter);
+        DeserializeResult dr = _json_dsval(model_curr, jw, jss, offset, instance, &non_optinal_counter);
         if (dr.st == DR_ERR) {
             de = dr.err; goto return_err;
         }
@@ -479,7 +586,7 @@ skip_field:
             }
             jw->cur++;
         }
-        de = DE_UNEXPECTED_CHARACTER; goto return_err;
+        de = DE_UNEXPECTED_EOF; goto return_err;
 
 finish_field:
         // Skip until ending ','
@@ -539,7 +646,7 @@ DeserializeResult deserialize_json(RStruct* model, void* stream) {
     jw.buff = stream;
     // Data structures
     struct _json_nesting_stack jss = {.stack = {0}, .overflown = 0, .sp = 0};
-    unordered_buffer uob = _uob_init(0, INSTANCE_INITIAL);
+    unordered_buffer uob = _uob_init(0, model->total_size);
 
     DeserializeResult ret = { 0 };
 
@@ -552,7 +659,7 @@ DeserializeResult deserialize_json(RStruct* model, void* stream) {
         if (c == '{') {
             _jss_push(&jss, 0);
             jw.cur++;
-            ret = _json_dsobj(model, &jw, &jss, &uob);
+            ret = _json_dsobj(model, &jw, &jss, 0, &uob);
             break;
         } else {
             arena_set_brk(brk);
@@ -560,9 +667,17 @@ DeserializeResult deserialize_json(RStruct* model, void* stream) {
         }
         jw.cur++;
     }
-
+    // Trailing stuff
+    while(skip_chars(jw.buff[jw.cur])) jw.cur++;
+    
+    
     if (ret.st == DR_OK) {
-        // Check compatibilty and migrate
+        // Expect EOF
+        if (jw.cur != jw.eof - 1) {
+            arena_set_brk(brk);
+            return RET_ERR(DE_EXPECTED_EOF);
+        }
+
         returned_instance = malloc(model->total_size);
         memcpy(returned_instance, uob.data, model->total_size);
         ret.data.buff = returned_instance;

@@ -219,12 +219,34 @@ void refl_destroy_struct(RStruct* owned) {
 
 static void __struct_generic_destructor(RStruct* t, RObject instance, int free_father);
 
+static void __array_generic_destructor(RField* arr, void* src) {
+    int dyn = arr->kind == K_DYN_ARRAY;
+    r_array_t* a = (r_array_t*)src;
+    if (arr->subtype.subfield->kind == K_STRING) {
+        size_t nelem = (dyn)? a->size : arr->size;
+        uint8_t* _arr = (dyn)? a->array : (uint8_t*)src;
+        for (size_t i = 0; i < nelem; i++)
+            free(((char**)_arr)[i]);
+    }
+    else if (arr->subtype.subfield->kind == K_STRUCT && dyn) {
+        for (size_t i = 0; i < a->size; i++)
+        {
+            __struct_generic_destructor(
+                arr->subtype.subfield->subtype.s, 
+                a->array + (arr->subtype.subfield->subtype.s->total_size * i),
+                0
+            );
+        }
+    }
+    if (dyn) free(a->array);
+}
+
 static void __field_generic_destructor(RField* f, void* src) {
     switch (f->kind)
     {
     case K_DYN_ARRAY:
-        r_array_t* a = (r_array_t*)src;
-        free(a->array);
+    case K_FIXED_ARRAY:
+        __array_generic_destructor(f, src);
         break;
 
     case K_OPTION:

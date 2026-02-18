@@ -9,8 +9,8 @@
 
 void debug_print_struct(RStruct* s, void* instance, int __pretty) {
     SerializePolicy sp = {
-        .arr_end = " ]",
-        .arr_start = "[ ",
+        .arr_end = "]",
+        .arr_start = "[",
         .arr_sep = ", ",
         .enum_as_string = 1,
         .field_sep = ", ",
