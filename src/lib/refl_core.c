@@ -217,6 +217,8 @@ void refl_destroy_struct(RStruct* owned) {
     free(owned);
 }
 
+static void __struct_generic_destructor(RStruct* t, RObject instance, int free_father);
+
 static void __field_generic_destructor(RField* f, void* src) {
     switch (f->kind)
     {
@@ -234,19 +236,27 @@ static void __field_generic_destructor(RField* f, void* src) {
 
     case K_STRING:
         free(*(char**)src);
-    
+        break;
+    case K_STRUCT:
+        __struct_generic_destructor(f->subtype.s, src, 0);
+        break;
     default:
         break;
     }
 }
 
-void refl_generic_destructor(RStruct* t, RObject instance) {
+static void __struct_generic_destructor(RStruct* t, RObject instance, int free_father) {
+
     for (size_t i = 0; i < t->n_elements; i++)
     {
         RField* f = t->fields[i];
         __field_generic_destructor(f, instance + f->offset);
     }
-    free(instance);
+    if (free_father)free(instance);
+}
+
+void refl_generic_destructor(RStruct* t, RObject instance) {
+    __struct_generic_destructor(t, instance, 1);
 }
 
 

@@ -18,11 +18,13 @@
 
 REFLECT(struct) {
     uint32_t a;
+    const char* str;
     OPTION(uint32_t) b;
 } __P;
 
 REFLECT(struct) {
     uint32_t i;
+    bool fucking_boolean;
     __P field;    
 } ds_test_t;
 

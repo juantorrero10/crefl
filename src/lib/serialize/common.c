@@ -263,11 +263,13 @@ g_arraylist_t _gal_init(int n_arena, size_t initial, size_t chunk_size) {
 
 void _gal_append(g_arraylist_t* gal, void* object) {
     if (gal->size >= gal->capacity) {
-        arena_alloc(gal->n_arena, gal->capacity * gal->chunk_size);
-        gal->capacity *= 2;
+        arena_alloc(gal->n_arena, gal->chunk_size);
+        gal->capacity += 1;
     }
     memcpy(&((uint8_t*)gal->data)[gal->size++ * gal->chunk_size], object, gal->chunk_size);
 }
+
+void _gal_empty(g_arraylist_t* gal) { gal->size = 0; }
 
 void _gal_free(g_arraylist_t* gal) { 
     arena_dealloc(gal->n_arena, gal->capacity); 

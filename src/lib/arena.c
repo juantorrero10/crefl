@@ -51,7 +51,8 @@ void arena_init(size_t initial_cap) {
 }
 
 void* arena_alloc(int n, size_t sz) {
-    if (n == 0) { 
+    if (n == 0) {
+        printf("+ %zu bytes\n", sz);
         void* ret = g_scratch_arena.arena + g_scratch_arena.brk;
         memset(ret, 0, sz);
         if (g_scratch_arena.brk + sz > g_scratch_arena.capacity) {
@@ -79,11 +80,15 @@ void* arena_alloc(int n, size_t sz) {
 
 void arena_dealloc(int n, size_t sz) {
     if (n == 0) {
+        printf("- %zu bytes\n", sz);
         if (g_scratch_arena.num_partitions > 0) {
             scratch_arena_partition* a = &g_scratch_arena.partitions[g_scratch_arena.num_partitions - 1]; 
             if(
-                g_scratch_arena.arena + (g_scratch_arena.brk) - sz > 
+                g_scratch_arena.arena + (g_scratch_arena.brk) - sz < 
                 a->arena + a->capacity) {
+                    size_t last_end = (size_t)a->arena + a->capacity - (size_t)GA.arena;
+                    size_t new_brk = GA.brk - sz;
+                    printf("LAST PART END: ->%zu, %zu\n", last_end, new_brk);
                     g_scratch_memory_failed = 1;
                 }
         }
@@ -110,7 +115,7 @@ int arena_create_partition(size_t size) {
         .capacity = cap,
         .robbing = 0
     };
-    g_scratch_arena.brk += cap;
+    g_scratch_arena.brk += ((size_t)as - ((size_t)GA.arena + GA.brk)) + cap;
     g_scratch_arena.num_partitions++;
     return n + 1;
 }

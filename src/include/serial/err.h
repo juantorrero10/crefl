@@ -11,7 +11,8 @@ typedef enum {
     DE_TOO_MUCH_NESTING,
     DE_UNCLOSED_DQUOTE,
     DE_NUMBER_CONVERSION_ERROR,
-    DE_MEMORY_ERROR
+    DE_MEMORY_ERROR,
+    DE_UNKNOWN_KEYWORD
 } DeserializeError;
 
 typedef struct {

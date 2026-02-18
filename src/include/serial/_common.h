@@ -72,6 +72,7 @@ void _fp_free(temp_field_pool* fp);
 g_arraylist_t _gal_init(int n_arena, size_t initial, size_t chunk_size);
 void _gal_append(g_arraylist_t* gal, void* object);
 void _gal_free(g_arraylist_t* gal);
+void _gal_empty(g_arraylist_t* gal);
 unordered_buffer _uob_init(int n_arena, size_t initial);
 void _uob_append(unordered_buffer* uob, void* src, size_t sz); 
 void _uob_free(unordered_buffer* uob);
