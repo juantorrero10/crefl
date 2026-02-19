@@ -651,6 +651,9 @@ DeserializeResult deserialize_json(RStruct* model, void* stream) {
     DeserializeResult ret = { 0 };
 
     void* returned_instance = NULL;
+    if (jw.cur == jw.eof) {
+        return RET_ERR(DE_EMPTY_STREAM);
+    }
     
     while(jw.cur < jw.eof)
     {

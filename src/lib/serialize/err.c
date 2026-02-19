@@ -33,6 +33,8 @@ char* deserialize_strerror(DeserializeError e) {
         return "Unexpected end-of-file.";
     case DE_EXPECTED_EOF:
         return "Expected end-of-file but stream still had more data.";
+    case DE_EMPTY_STREAM:
+        return "Empty stream.";
     default:
         return "";
     }
