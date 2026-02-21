@@ -5,7 +5,7 @@
 #include <crefl/types.h>
 #include <crefl/core.h>
 
-#include <serial/_common.h>
+#include <crefl/serial/_common.h>
 
 void debug_print_struct(RStruct* s, void* instance, int __pretty) {
     SerializePolicy sp = {

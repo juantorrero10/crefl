@@ -13,8 +13,6 @@
 #include <crefl/core.h>
 #include <_arena.h>
 
-// 1 MB
-#define SCRATCH_ARENA_SIZE 1024 * 1024
 
 CREFL_Section_table* sections_tables = NULL;
 CREFL_Header* base_ptr = NULL;
@@ -271,7 +269,7 @@ static void populate_unions() {
 }
 
 
-void refl_engine_load(const char* file_path) {
+void refl_load_metadata(const char* file_path) {
 
     int fd = open(file_path, O_RDONLY, 0);
     if (fd < 0) {
@@ -310,9 +308,6 @@ void refl_engine_load(const char* file_path) {
 
 
     munmap(mapped, size);
-
-    // ALLOC SCRATCH ARENA
-    arena_init(SCRATCH_ARENA_SIZE);
 
     atexit(cleanup);
 }

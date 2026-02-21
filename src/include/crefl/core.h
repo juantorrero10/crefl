@@ -6,8 +6,16 @@
 
 extern char* G_STRING_POOL;
 
+/**
+ * @brief Load type metadata from .crefl file
+ */
+void refl_load_metadata(const char* file_path);
 
-void refl_engine_load(const char* file_path);
+/**
+ * @brief Initialize Thread-Local objects
+ */
+void refl_threadlocal_init();
+
 RStruct* refl_fetch_struct(const char* name);
 REnum* refl_fetch_enum(const char* name);
 const char* refl_enum_get_label(REnum* type, int val);

@@ -6,7 +6,7 @@
 #include <crefl/types.h>
 #include <crefl/core.h>
 
-#include <serial/_common.h>
+#include <crefl/serial/_common.h>
 #include <_arena.h>
 
 #define BUFFERS_INITIAL 64

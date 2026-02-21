@@ -32,6 +32,17 @@ static inline uint32_t fnv1a(const char* name, size_t sz) {
     return h;
 }
 
+// 1 MB
+#define SCRATCH_ARENA_SIZE 1024 * 1024
+
+
+void refl_threadlocal_init() {
+    // ALLOC SCRATCH ARENA
+    arena_init(SCRATCH_ARENA_SIZE);
+}
+
+
+
 REnum* refl_fetch_enum(const char* name) {
     uint32_t att_count = 0;
     uint32_t idx = fnv1a(name, strlen(name)) % G_REFL_ENUMS.count;

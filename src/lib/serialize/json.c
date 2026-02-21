@@ -12,8 +12,8 @@
 #include <crefl/cmp.h>
 #include <crefl/core.h>
 
-#include <serial/_common.h>
-#include <serial/err.h>
+#include <crefl/serial/_common.h>
+#include <crefl/serial/err.h>
 #include <_arena.h>
 
 
