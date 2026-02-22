@@ -35,9 +35,11 @@ __TLS int g_scratch_memory_failed = 0;
 
 #define GA g_scratch_arena
 
-static void __free_arena() { munmap(g_scratch_arena.arena, g_scratch_arena.capacity); }
 
-void arena_init(size_t initial_cap) {
+static void __free_arena() { munmap(g_scratch_arena.arena, g_scratch_arena.capacity); }
+void arena_tls_free() {munmap(g_scratch_arena.arena, g_scratch_arena.capacity);}
+
+void arena_init(size_t initial_cap, int manual_dealloc) {
     g_scratch_arena.partitions = mmap(
         NULL, 
         MAX(initial_cap, MIN_SIZE),
@@ -47,7 +49,7 @@ void arena_init(size_t initial_cap) {
     // Trivial partition
     g_scratch_arena.capacity = initial_cap;
     g_scratch_arena.brk = 0;
-    atexit(__free_arena);
+    if (!manual_dealloc) atexit(__free_arena);
 }
 
 void* arena_alloc(int n, size_t sz) {

@@ -36,11 +36,12 @@ static inline uint32_t fnv1a(const char* name, size_t sz) {
 #define SCRATCH_ARENA_SIZE 1024 * 1024
 
 
-void refl_threadlocal_init() {
+void refl_threadlocal_init(int manual_dealloc) {
     // ALLOC SCRATCH ARENA
-    arena_init(SCRATCH_ARENA_SIZE);
+    arena_init(SCRATCH_ARENA_SIZE, manual_dealloc);
 }
 
+void refl_threadlocal_destroy() { arena_tls_free(); }
 
 
 REnum* refl_fetch_enum(const char* name) {

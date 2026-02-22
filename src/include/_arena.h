@@ -8,7 +8,8 @@
 #   define __TLS _Thread_local
 #endif
 
-void arena_init(size_t initial_cap);
+void arena_init(size_t initial_cap, int manual_dealloc);
+void arena_tls_free();
 void* arena_alloc(int n, size_t sz);
 void arena_dealloc(int n, size_t sz);
 int arena_create_partition(size_t size);

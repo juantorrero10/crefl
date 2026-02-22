@@ -16,6 +16,8 @@ void refl_load_metadata(const char* file_path);
  */
 void refl_threadlocal_init();
 
+void refl_threadlocal_destroy();
+
 RStruct* refl_fetch_struct(const char* name);
 REnum* refl_fetch_enum(const char* name);
 const char* refl_enum_get_label(REnum* type, int val);
