@@ -14,7 +14,7 @@ void refl_load_metadata(const char* file_path);
 /**
  * @brief Initialize Thread-Local objects
  */
-void refl_threadlocal_init();
+void refl_threadlocal_init(int manual_dealloc);
 
 void refl_threadlocal_destroy();
 
