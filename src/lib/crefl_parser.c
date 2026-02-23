@@ -308,6 +308,7 @@ void refl_load_metadata(const char* file_path) {
 
 
     munmap(mapped, size);
+    close(fd);
 
     atexit(cleanup);
 }
