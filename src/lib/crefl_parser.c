@@ -8,9 +8,11 @@
 #include <errno.h>
 
 #include <crefl/types.h>
+#include <crefl/scope.h>
+#include <crefl/core.h>
+
 #include <_fetched.h>
 #include <_dot_crefl.h>
-#include <crefl/core.h>
 #include <_arena.h>
 
 
@@ -22,9 +24,16 @@ CREFL_Struct* struct_section = NULL;
 CREFL_Union* union_section = NULL;
 uint32_t* index_table = NULL;
 
+typedef struct {
+    refl_st_hashmap_t structs;
+    refl_en_hashmap_t enums;
+    refl_un_hashmap_t unions;
+    refl_fi_array_t fields;
+    char* string_pool;
+} mdata_table_set;
+
 size_t NUM_SECTIONS;
 
-static void cleanup();
 
 static void print_header(void* mem, size_t sz) {
     DEREF_NEW(CREFL_Header, header, mem, 0);
@@ -50,28 +59,28 @@ static void print_header(void* mem, size_t sz) {
     NUM_SECTIONS = header->n_sections;
 }
 
-static inline void set_string(CREFL_String* desc, char** dst) {
-    *dst = G_STRING_POOL + desc->offset;
+static inline void set_string(char* string_pool, CREFL_String* desc, char** dst) {
+    *dst = string_pool + desc->offset;
 }
 
-static char* get_st_un_name_from_file_id(uint32_t id, CREFL_Section_kind where) {
+static char* get_st_un_name_from_file_id(char* string_pool, uint32_t id, CREFL_Section_kind where) {
     DEREF_NEW(CREFL_Struct, section, base_ptr, sections_tables[where].start);
-    return G_STRING_POOL + section[id].type_name.offset;
+    return string_pool + section[id].type_name.offset;
 }
 
-static char* get_en_name_from_file_id(uint32_t id) {
+static char* get_en_name_from_file_id(char* string_pool, uint32_t id) {
     DEREF_NEW(CREFL_Enum, section, base_ptr, sections_tables[CREFL_SECTION_ENUMS].start);
-    return G_STRING_POOL + section[id].type_name.offset;
+    return string_pool + section[id].type_name.offset;
 }
 
-void populate_fields() {
-    G_REFL_FIELDS.count = sections_tables[CREFL_SECTION_FIELDS].n_elements;
+void populate_fields(mdata_table_set* table) {
+    table->fields.count = sections_tables[CREFL_SECTION_FIELDS].n_elements;
     for (size_t i = 0; i < sections_tables[CREFL_SECTION_FIELDS].n_elements; i++)
     {
-        RField* curr = &G_REFL_FIELDS.fields[i];
+        RField* curr = &table->fields.fields[i];
         CREFL_Field* ady = &field_section[i];
         *curr = (RField){ 0 };
-        set_string(&ady->name, (char**)&curr->name);
+        set_string(table->string_pool, &ady->name, (char**)&curr->name);
         curr->kind = (RKind)ady->kind;
         curr->size = ady->array_size;
         curr->offset = ady->offset;
@@ -82,16 +91,16 @@ void populate_fields() {
             case K_OPTION:
             case K_POINTER:
             case K_FIXED_ARRAY:
-                curr->subtype.subfield = &G_REFL_FIELDS.fields[ady->subtype_data];
+                curr->subtype.subfield = &table->fields.fields[ady->subtype_data];
                 break;
 
             case K_ENUM:
-                curr->subtype.e = refl_fetch_enum(get_en_name_from_file_id(ady->subtype_data)); break;
+                curr->subtype.e = refl_fetch_enum_from(table, get_en_name_from_file_id(table->string_pool, ady->subtype_data)); break;
             case K_STRUCT:
-                curr->subtype.s = refl_fetch_struct(get_st_un_name_from_file_id(ady->subtype_data, CREFL_SECTION_STRUCTS));
+                curr->subtype.s = refl_fetch_struct_from(table, get_st_un_name_from_file_id(table->string_pool, ady->subtype_data, CREFL_SECTION_STRUCTS));
                 break;
             case K_UNION:
-                curr->subtype.u = refl_fetch_union(get_st_un_name_from_file_id(ady->subtype_data, CREFL_SECTION_UNIONS));
+                curr->subtype.u = refl_fetch_union_from(table, get_st_un_name_from_file_id(table->string_pool, ady->subtype_data, CREFL_SECTION_UNIONS));
                 break;
             case K_PRIMITIVE:
                 curr->subtype.prim = (RPrimitive)ady->subtype_data;
@@ -129,32 +138,32 @@ static inline void print_fields(RField* f, size_t sz) {
 
 
 
-static void populate_enums() {
+static void populate_enums(refl_en_hashmap_t* enum_hm, char* string_pool) {
     DEREF_NEW(CREFL_Hashtable_Header, enum_ht_header, base_ptr, sections_tables[CREFL_SECTION_HASHTABLES].start);
     size_t n_hash_entries = enum_ht_header->n_elements;
     if (n_hash_entries == 0) return;
-    G_REFL_ENUMS.map = calloc(sizeof(refl_en_entry_t), 2 * n_hash_entries);
-    G_REFL_ENUMS.count = 2 * n_hash_entries;
+    enum_hm->map = calloc(sizeof(refl_en_entry_t), 2 * n_hash_entries);
+    enum_hm->count = 2 * n_hash_entries;
     CREFL_Hashtable_Entry* enum_hashtable = (CREFL_Hashtable_Entry*)(enum_ht_header + 1);
     for (size_t i = 0; i < n_hash_entries; i++)
     {
         uint32_t file_idx = enum_hashtable[i].element_id;
         uint32_t new_idx  = enum_hashtable[i].hashed_index;
         CREFL_Enum* ady = enum_section + file_idx;
-        refl_en_entry_t* entry = &G_REFL_ENUMS.map[new_idx];
+        refl_en_entry_t* entry = &enum_hm->map[new_idx];
         
         if (entry->k_name != NULL) {
             // Collision!!!, linearly find next empty spot
             do  {
                 new_idx = (new_idx + 1) % (2 * n_hash_entries);
-                entry = &G_REFL_ENUMS.map[new_idx];
+                entry = &enum_hm->map[new_idx];
             } while(entry->k_name != NULL);
         }
         
         // Free spot by this point
         REnum* curr = &entry->val;
-        set_string(&ady->type_name, (char**)&entry->k_name);
-        set_string(&ady->type_name, (char**)&curr->name_type);
+        set_string(string_pool, &ady->type_name, (char**)&entry->k_name);
+        set_string(string_pool, &ady->type_name, (char**)&curr->name_type);
         
         // Set the names
         curr->n_elements = ady->n_elements;
@@ -163,7 +172,7 @@ static void populate_enums() {
         CREFL_String* str_refs = (CREFL_String*)(index_table + ady->names);   
         for (size_t i = 0; i < ady->n_elements; i++)
         {
-            curr->names[i] = G_STRING_POOL + str_refs[i].offset;
+            curr->names[i] = string_pool + str_refs[i].offset;
         }
 
         curr->indexes = calloc(sizeof(size_t), ady->n_elements);
@@ -174,7 +183,7 @@ static void populate_enums() {
     }
 }
 
-static void populate_structs() {
+static void populate_structs(refl_st_hashmap_t* struct_hm, refl_fi_array_t* field_arr, char* string_pool) {
     DEREF_NEW(CREFL_Hashtable_Header, ht_header, base_ptr, sections_tables[CREFL_SECTION_HASHTABLES].start);
     
     // find the struct table, 2 second one
@@ -184,8 +193,8 @@ static void populate_structs() {
     size_t n_hash_entries = ht_header->n_elements;
     if (!n_hash_entries) return;
 
-    G_REFL_STRUCTS.map = calloc(sizeof(refl_st_entry_t), 2 * n_hash_entries);
-    G_REFL_STRUCTS.count = 2 * n_hash_entries;
+    struct_hm->map = calloc(sizeof(refl_st_entry_t), 2 * n_hash_entries);
+    struct_hm->count = 2 * n_hash_entries;
 
     CREFL_Hashtable_Entry* struct_ht = (CREFL_Hashtable_Entry*)(ht_header + 1);
     for (size_t i = 0; i < n_hash_entries; i++)
@@ -194,28 +203,28 @@ static void populate_structs() {
         size_t new_idx = struct_ht[i].hashed_index;
         CREFL_Struct* ady = &struct_section[file_idx];
 
-        refl_st_entry_t* entry = &G_REFL_STRUCTS.map[new_idx];
+        refl_st_entry_t* entry = &struct_hm->map[new_idx];
         while(entry->k_name != NULL) {
             new_idx = (new_idx + 1) % (2 * n_hash_entries);
-            entry = &G_REFL_STRUCTS.map[new_idx];
+            entry = &struct_hm->map[new_idx];
         }
         RStruct* curr =  &entry->val;
 
         // Occupy the spot
-        set_string(&ady->type_name, (char**)&entry->k_name);
-        set_string(&ady->type_name, (char**)&curr->name_type);
+        set_string(string_pool, &ady->type_name, (char**)&entry->k_name);
+        set_string(string_pool, &ady->type_name, (char**)&curr->name_type);
 
         curr->n_elements = ady->n_elements;
         curr->total_size = ady->total_size;
         curr->fields = calloc(sizeof(void*), curr->n_elements);
         for (size_t i = 0; i < curr->n_elements; i++)
         {
-            curr->fields[i] = G_REFL_FIELDS.fields + (uint32_t)(index_table + ady->fields)[i];
+            curr->fields[i] = field_arr->fields + (uint32_t)(index_table + ady->fields)[i];
         }    
     }
 }
 
-static void populate_unions() {
+static void populate_unions(refl_un_hashmap_t* union_hm, refl_fi_array_t* field_arr, char* string_pool) {
     // find the union table, third one
     uint8_t* ht_base =
     (uint8_t*)base_ptr + sections_tables[CREFL_SECTION_HASHTABLES].start;
@@ -237,8 +246,8 @@ static void populate_unions() {
 
     if (!n_hash_entries) return;
 
-    G_REFL_UNIONS.map = calloc(sizeof(refl_un_entry_t), 2 * n_hash_entries);
-    G_REFL_UNIONS.count = 2 * n_hash_entries;
+    union_hm->map = calloc(sizeof(refl_un_entry_t), 2 * n_hash_entries);
+    union_hm->count = 2 * n_hash_entries;
 
 
                     
@@ -246,30 +255,34 @@ static void populate_unions() {
     {
         size_t file_idx = union_ht[i].element_id;
         size_t new_idx = union_ht[i].hashed_index;
-        refl_un_entry_t* entry = &G_REFL_UNIONS.map[new_idx];
+        refl_un_entry_t* entry = &union_hm->map[new_idx];
         while(entry->k_name != NULL) {
             new_idx = (new_idx + 1) % (2 * n_hash_entries);
-            entry = &G_REFL_UNIONS.map[new_idx];
+            entry = &union_hm->map[new_idx];
         }
         RUnion* curr =  &entry->val;
         CREFL_Union* ady = &union_section[file_idx];
 
         // Occupy the spot
-        set_string(&ady->type_name, (char**)&entry->k_name);
-        set_string(&ady->type_name, (char**)&curr->name_type);
+        set_string(string_pool, &ady->type_name, (char**)&entry->k_name);
+        set_string(string_pool, &ady->type_name, (char**)&curr->name_type);
 
         curr->n_elements = ady->n_elements;
         curr->total_size = ady->total_size;
         curr->fields = calloc(sizeof(void*), curr->n_elements);
         for (size_t i = 0; i < curr->n_elements; i++)
         {
-            curr->fields[i] = G_REFL_FIELDS.fields + (uint32_t)(index_table + ady->fields)[i];
+            curr->fields[i] = field_arr->fields + (uint32_t)(index_table + ady->fields)[i];
         }    
     }
 }
 
 
-void refl_load_metadata(const char* file_path) {
+void _parse_crefl(
+    const char* file_path, 
+    mdata_table_set* table
+) {
+
 
     int fd = open(file_path, O_RDONLY, 0);
     if (fd < 0) {
@@ -279,6 +292,14 @@ void refl_load_metadata(const char* file_path) {
     struct stat st;
     fstat(fd, &st);
     size_t size = st.st_size;
+
+    sections_tables = NULL;
+    base_ptr        = NULL;
+    field_section   = NULL;
+    enum_section    = NULL;
+    struct_section  = NULL;
+    union_section   = NULL;
+    index_table     = NULL;
 
 
     void* mapped = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -294,45 +315,86 @@ void refl_load_metadata(const char* file_path) {
     DEREF(uint32_t,             index_table, mapped, sections_tables[CREFL_SECTION_INDEX_TABLE].start);
 
     size_t sp_size = sections_tables[CREFL_SECTION_STRING_POOL].n_elements;
-    G_STRING_POOL = malloc(sp_size);
+    table->string_pool = malloc(sp_size);
 
-    memcpy(G_STRING_POOL, (uint8_t*)mapped + (sections_tables[CREFL_SECTION_STRING_POOL].start), sp_size);
+    memcpy(table->string_pool, (uint8_t*)mapped + (sections_tables[CREFL_SECTION_STRING_POOL].start), sp_size);
     // Fields need to be allocated before anything alse
-    G_REFL_FIELDS.fields = malloc(sizeof(RField) * sections_tables[CREFL_SECTION_FIELDS].n_elements);
+    table->fields.fields = malloc(sizeof(RField) * sections_tables[CREFL_SECTION_FIELDS].n_elements);
 
-    populate_enums();
-    populate_structs();
-    populate_unions();
-    populate_fields();
+    populate_enums  (&table->enums, table->string_pool);
+    populate_structs(&table->structs, &table->fields, table->string_pool);
+    populate_unions (&table->unions, &table->fields, table->string_pool);
+    populate_fields (table);
     //print_fields(G_REFL_FIELDS.fields, G_REFL_FIELDS.count);
 
 
     munmap(mapped, size);
     close(fd);
-
-    atexit(cleanup);
 }
 
 
-static void cleanup() {
-    free(G_REFL_FIELDS.fields);
-    for (size_t i = 0; i < G_REFL_ENUMS.count; i++)
+static void _destroy_scope(mdata_table_set* scope) {
+    free(scope->fields.fields);
+    for (size_t i = 0; i < scope->enums.count; i++)
     {
-        free(G_REFL_ENUMS.map[i].val.names);
-        free(G_REFL_ENUMS.map[i].val.indexes);
+        free(scope->enums.map[i].val.names);
+        free(scope->enums.map[i].val.indexes);
     }
-    for (size_t i = 0; i < G_REFL_STRUCTS.count; i++)
+    for (size_t i = 0; i < scope->structs.count; i++)
     {
-        free(G_REFL_STRUCTS.map[i].val.fields);
-    }
-    
-    for (size_t i = 0; i < G_REFL_UNIONS.count; i++)
-    {
-        free(G_REFL_UNIONS.map[i].val.fields);
+        free(scope->structs.map[i].val.fields);
     }
     
-    free(G_REFL_STRUCTS.map);
-    free(G_REFL_UNIONS.map);
-    free(G_REFL_ENUMS.map);
-    free(G_STRING_POOL);
+    for (size_t i = 0; i < scope->unions.count; i++)
+    {
+        free(scope->unions.map[i].val.fields);
+    }
+    
+    free(scope->structs.map);
+    free(scope->unions.map);
+    free(scope->enums.map);
+    free(scope->string_pool);
 }
+
+static void __destroy_global_scope() {
+    mdata_table_set t = {0};
+    t.enums = G_REFL_ENUMS;
+    t.structs = G_REFL_STRUCTS;
+    t.fields = G_REFL_FIELDS;
+    t.unions = G_REFL_UNIONS;
+    t.string_pool = G_STRING_POOL;
+    _destroy_scope(&t);
+}
+
+/**
+ * @brief Parse .crefl file and store types globally. 
+ */
+void refl_load_metadata(const char* file_name) {
+    mdata_table_set t = {0};
+    _parse_crefl(
+        file_name, 
+        &t
+    );
+    G_REFL_STRUCTS = t.structs;
+    G_REFL_ENUMS = t.enums;
+    G_REFL_UNIONS = t.unions;
+    G_REFL_FIELDS = t.fields;
+    G_STRING_POOL = t.string_pool;
+    atexit(__destroy_global_scope);
+}
+
+RHandle refl_load_metadata_at(char* file_name) {
+    mdata_table_set* t = malloc(sizeof(mdata_table_set));
+    _parse_crefl(
+        file_name,
+        t
+    );
+    return (RHandle)(void*)t;
+}
+
+void refl_close_scope(RHandle scope) {
+    mdata_table_set* t = (mdata_table_set*)(void*)scope;
+    _destroy_scope(t);
+    free(t);
+}
+

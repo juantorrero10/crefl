@@ -8,6 +8,7 @@
 
 #include <crefl/core.h>
 #include <crefl/types.h>
+#include <crefl/scope.h>
 #include <_fetched.h>
 #include <_arena.h>
 
@@ -17,6 +18,13 @@ refl_en_hashmap_t G_REFL_ENUMS = { 0 };
 refl_fi_array_t G_REFL_FIELDS = { 0 };
 char* G_STRING_POOL = NULL;
 
+typedef struct {
+    refl_st_hashmap_t structs;
+    refl_en_hashmap_t enums;
+    refl_un_hashmap_t unions;
+    refl_fi_array_t fields;
+    char* string_pool;
+} mdata_table_set;
 
 
 
@@ -44,28 +52,61 @@ void refl_threadlocal_init(int manual_dealloc) {
 void refl_threadlocal_destroy() { arena_tls_free(); }
 
 
-REnum* refl_fetch_enum(const char* name) {
+REnum* refl_fetch_enum_from(RHandle scope, const char* name) {
+    mdata_table_set* t = (mdata_table_set*)scope;
     uint32_t att_count = 0;
-    uint32_t idx = fnv1a(name, strlen(name)) % G_REFL_ENUMS.count;
-    while(((G_REFL_ENUMS.map[idx].k_name == NULL) 
-    || (strcmp(name, G_REFL_ENUMS.map[idx].k_name) != 0)) && att_count <= G_REFL_ENUMS.count ) {
+    uint32_t idx = fnv1a(name, strlen(name)) % t->enums.count;
+    while(((t->enums.map[idx].k_name == NULL) 
+    || (strcmp(name, t->enums.map[idx].k_name) != 0)) && att_count <= t->enums.count ) {
         att_count++;
-        idx = (idx + 1) % G_REFL_ENUMS.count;
+        idx = (idx + 1) % t->enums.count;
     }
-    return (att_count <= G_REFL_ENUMS.count)? &G_REFL_ENUMS.map[idx].val : NULL;
+    return (att_count <= t->enums.count)? &t->enums.map[idx].val : NULL;
 }
 
+REnum* refl_fetch_enum(const char* name) {
+    mdata_table_set t = {0};
+    t.enums = G_REFL_ENUMS;
+    return refl_fetch_enum_from((void*)&t, name);
+}
+
+
+RStruct* refl_fetch_struct_from(RHandle scope, const char* name) {
+    mdata_table_set* t = (mdata_table_set*)scope;
+    uint32_t att_count = 0;
+    uint32_t idx = fnv1a(name, strlen(name)) % t->structs.count;
+    while(((t->structs.map[idx].k_name == NULL) 
+    || (strcmp(name, t->structs.map[idx].k_name) != 0)) && att_count <= t->structs.count ) {
+        att_count++;
+        idx = (idx + 1) % t->structs.count;
+    }
+    return (att_count <= t->structs.count)? &t->structs.map[idx].val : NULL;
+}
 
 RStruct* refl_fetch_struct(const char* name) {
-    uint32_t att_count = 0;
-    uint32_t idx = fnv1a(name, strlen(name)) % G_REFL_STRUCTS.count;
-    while(((G_REFL_STRUCTS.map[idx].k_name == NULL) 
-    || (strcmp(name, G_REFL_STRUCTS.map[idx].k_name) != 0)) && att_count <= G_REFL_STRUCTS.count ) {
-        att_count++;
-        idx = (idx + 1) % G_REFL_STRUCTS.count;
-    }
-    return (att_count <= G_REFL_STRUCTS.count)? &G_REFL_STRUCTS.map[idx].val : NULL;
+    mdata_table_set t = {0};
+    t.structs = G_REFL_STRUCTS;
+    return refl_fetch_struct_from((void*)&t, name);
 }
+
+RUnion* refl_fetch_union_from(RHandle scope, const char* name) {
+    mdata_table_set* t = (mdata_table_set*)scope;
+    uint32_t att_count = 0;
+    uint32_t idx = fnv1a(name, strlen(name)) % t->unions.count;
+    while(((t->unions.map[idx].k_name == NULL) 
+    || (strcmp(name, t->unions.map[idx].k_name) != 0)) && att_count <= t->unions.count ) {
+        att_count++;
+        idx = (idx + 1) % t->unions.count;
+    }
+    return (att_count <= t->unions.count)? &t->unions.map[idx].val : NULL;
+}
+
+RUnion* refl_fetch_union(const char* name) {
+    mdata_table_set t = {0};
+    t.unions = G_REFL_UNIONS;
+    return refl_fetch_union_from((void*)&t, name);
+}
+
 
 int refl_enum_has_label(REnum* e, const char* lbl) {
     if (!lbl) return 0;
@@ -79,16 +120,6 @@ int refl_enum_has_label(REnum* e, const char* lbl) {
 
 
 
-RUnion* refl_fetch_union(const char* name) {
-    uint32_t att_count = 0;
-    uint32_t idx = fnv1a(name, strlen(name)) % G_REFL_UNIONS.count;
-    while(((G_REFL_UNIONS.map[idx].k_name == NULL) 
-    || (strcmp(name, G_REFL_UNIONS.map[idx].k_name) != 0)) && att_count <= G_REFL_UNIONS.count ) {
-        att_count++;
-        idx = (idx + 1) % G_REFL_UNIONS.count;
-    }
-    return (att_count <= G_REFL_UNIONS.count)? &G_REFL_UNIONS.map[idx].val : NULL;
-}
 
 void refl_set_field(RStruct* s, const char* field_name, RObject instance, void* buff) {
     if (!s || !field_name || !buff || !instance ) return;
