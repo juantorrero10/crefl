@@ -1,7 +1,7 @@
 TARGET      = crefl
 CC          = gcc
 
-BASE_CFLAGS = -Wall -Wextra -Werror -std=c17 -Isrc/include -m64 -MMD -MP -g -O0
+BASE_CFLAGS = -Wall -Wextra -Werror -std=c17 -Isrc/include -m64 -MMD -MP -O2
 CFLAGS      = $(BASE_CFLAGS) -fPIC
 AR          = ar
 ARFLAGS     = rcs
