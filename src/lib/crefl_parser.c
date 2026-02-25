@@ -383,7 +383,7 @@ void refl_load_metadata(const char* file_name) {
     atexit(__destroy_global_scope);
 }
 
-RHandle refl_load_metadata_at(char* file_name) {
+RHandle refl_load_metadata_to(char* file_name) {
     mdata_table_set* t = malloc(sizeof(mdata_table_set));
     _parse_crefl(
         file_name,
