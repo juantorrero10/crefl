@@ -5,10 +5,10 @@ set -euo pipefail
 OUT_DIR="${1:-./extracted}"
 SRC_DIR="src"
 GEN_DIR="crefl_gen"
-LIB_PATH="build/lib/libcrefl.so"   # <- adjust if needed
+LIB_PATH="build/lib/libcrefl.a"
 
 echo "==> Building project"
-make
+make static -j4
 
 echo "==> Preparing output directory: $OUT_DIR"
 rm -rf "$OUT_DIR"
@@ -23,9 +23,9 @@ else
     echo "!! Warning: $GEN_DIR not found, skipping"
 fi
 
-# ---- Copy shared library ----
+# ---- Copy static library ----
 if [ -f "$LIB_PATH" ]; then
-    echo "==> Copying shared library"
+    echo "==> Copying static library"
     cp "$LIB_PATH" "$OUT_DIR/lib/"
 else
     echo "!! Warning: $LIB_PATH not found, skipping"
