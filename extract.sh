@@ -5,10 +5,10 @@ set -euo pipefail
 OUT_DIR="${1:-./extracted}"
 SRC_DIR="src"
 GEN_DIR="crefl_gen"
-LIB_PATH="build/lib/libcrefl.so"   # <- adjust if needed
+LIB_PATH="build/lib/libcrefl.a"   # <- adjust if needed
 
 echo "==> Building project"
-make -j4 OPT=3
+make static -j4 OPT=3
 
 echo "==> Preparing output directory: $OUT_DIR"
 rm -rf "$OUT_DIR"
