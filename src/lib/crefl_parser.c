@@ -335,19 +335,25 @@ void _parse_crefl(
 
 static void _destroy_scope(mdata_table_set* scope) {
     free(scope->fields.fields);
-    for (size_t i = 0; i < scope->enums.count; i++)
-    {
-        free(scope->enums.map[i].val.names);
-        free(scope->enums.map[i].val.indexes);
+    if (scope->enums.map) {
+        for (size_t i = 0; i < scope->enums.count; i++)
+        {
+            free(scope->enums.map[i].val.names);
+            free(scope->enums.map[i].val.indexes);
+        }
     }
-    for (size_t i = 0; i < scope->structs.count; i++)
-    {
-        free(scope->structs.map[i].val.fields);
+    if (scope->structs.map) {
+        for (size_t i = 0; i < scope->structs.count; i++)
+        {
+            free(scope->structs.map[i].val.fields);
+        }
+        
     }
-    
-    for (size_t i = 0; i < scope->unions.count; i++)
-    {
-        free(scope->unions.map[i].val.fields);
+    if (scope->unions.map) {
+        for (size_t i = 0; i < scope->unions.count; i++)
+        {
+            free(scope->unions.map[i].val.fields);
+        }
     }
     
     free(scope->structs.map);
@@ -384,7 +390,7 @@ void refl_load_metadata(const char* file_name) {
 }
 
 RHandle refl_load_metadata_to(char* file_name) {
-    mdata_table_set* t = malloc(sizeof(mdata_table_set));
+    mdata_table_set* t = calloc(1, sizeof(mdata_table_set));
     _parse_crefl(
         file_name,
         t
