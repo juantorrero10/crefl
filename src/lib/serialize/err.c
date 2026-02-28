@@ -35,6 +35,8 @@ char* deserialize_strerror(DeserializeError e) {
         return "Expected end-of-file but stream still had more data.";
     case DE_EMPTY_STREAM:
         return "Empty stream.";
+    case DE_BADLY_SCAPED_STRING:
+        return "Stream contained a badly scaped string.";
     default:
         return "";
     }

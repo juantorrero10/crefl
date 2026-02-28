@@ -29,7 +29,10 @@ void debug_print_struct(RStruct* s, void* instance, int __pretty) {
         .unwrap_optionals = 0,
         .pretty = __pretty,
         .str_end = "\"",
-        .str_start = "\""
+        .str_start = "\"",
+        .null_ptr = "0x0",
+        .null_str = "(null)",
+        .scape_special_ascii = 1
     };
     char* out = (char*)walk_type(&sp, s, instance);
     printf("%s\n", out);
