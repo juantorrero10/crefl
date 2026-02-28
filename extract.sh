@@ -8,7 +8,7 @@ GEN_DIR="crefl_gen"
 LIB_PATH="build/lib/libcrefl.so"   # <- adjust if needed
 
 echo "==> Building project"
-make
+make -j4 OPT=3
 
 echo "==> Preparing output directory: $OUT_DIR"
 rm -rf "$OUT_DIR"
