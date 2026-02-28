@@ -81,7 +81,7 @@ char* deserialize_strerror(DeserializeError e);
 #define currchar jw->buff[jw->cur]
 
 
-void* serialize_json(RStruct* s, RObject instance) {
+void* serialize_json(RStruct* s, RObject instance, int pretty) {
     SerializePolicy sp = {
         .arr_end = " ]",
         .arr_start = "[ ",
@@ -101,9 +101,12 @@ void* serialize_json(RStruct* s, RObject instance) {
         .opt_some_start = NULL,
         .opt_some_end = NULL,
         .unwrap_optionals = 1,
-        .pretty = 1,
+        .pretty = pretty,
         .str_end = "\"",
-        .str_start = "\""
+        .str_start = "\"",
+        .null_ptr = "0",
+        .null_str = "\"\"",
+        .scape_special_ascii = 1
     };
     return walk_type(&sp, s, instance);
 }
@@ -223,6 +226,57 @@ static inline void _jss_push(struct _json_nesting_stack* jss, uint8_t c) {
  */
 static inline void _jss_pop(struct _json_nesting_stack* jss, uint8_t c) {
     if (c == jss->stack[jss->sp - 1]) jss->sp--;
+}
+
+static const char _descape_lut[256] = {
+    ['\\'] = '\\', ['b'] = '\b', ['n'] = '\n', 
+    ['t'] = '\t', ['r'] = '\r', ['f'] = '\f', 
+    ['\"'] = '\"',
+};
+
+#define MEMCPY_MIN 16
+
+/**
+ * @brief De-scape string and alloc it the arena.
+ */
+static char* _json_descape_string(char* og, size_t og_size) {
+    // Descaped string is always shorter than original, so it will fit here.
+    char* buffer = arena_alloc(0, og_size + 1);
+    char* ptr = buffer;
+    char* next_backslash = NULL;
+    //char* read_ptr = og;
+    char descaped;
+    size_t chunk = 0;
+    size_t i = 0;
+    for (; i < og_size; i++)
+    {
+        // See if we can use memcpy to not copy large chunks byte by byte.
+        next_backslash = memchr(og + i, '\\', og_size - i);
+        chunk = (size_t)MAX((ssize_t)(next_backslash - (og + i)), 0);
+        if (!next_backslash) goto __no_more_backslashes;
+        if (chunk > 0) {
+            if (chunk < MEMCPY_MIN) 
+                while(chunk) { *(ptr++) = og[i++]; chunk--; };           
+            memcpy(ptr, og + i, chunk);
+            ptr += chunk;
+            i += chunk;
+        }
+        descaped = _descape_lut[(int)(og[++i])];
+        if (descaped == 0) goto __exit_error;
+        *ptr++ = descaped;
+    }
+
+__no_more_backslashes:
+    if (og_size - i >= 1) { 
+        memcpy(ptr, og + i, og_size - i);
+        ptr += og_size - i;
+    }
+    *ptr = '\0';    
+    return buffer;
+
+__exit_error:
+    arena_dealloc(0, og_size + 1);
+    return NULL;
 }
 
 
@@ -381,13 +435,12 @@ reading_string:
             // Write pointer
             uint8_t* str = jw->buff + substr_start;
             jw->cur++;
-            char* extracted = arena_alloc(0, str_len + 1);
-            memcpy(extracted, str, str_len);
-            refl_migrate_field(&curr, model, (uint8_t*)&extracted, dst, 0, wrapped_dst);
+            char* final_string = _json_descape_string((char*)str, str_len);
+            if (!final_string) return RET_ERR(DE_BADLY_SCAPED_STRING);
+            refl_migrate_field(&curr, model, (uint8_t*)&final_string, dst, 0, wrapped_dst);
             arena_dealloc(0, str_len + 1);
             goto finish_field;
         }
-        // Actual scaping of characters will be handled later down the line.
         if (scaped == 1) scaped = 0;       // Only lasts one character   
         if (currchar == '\\') scaped ^= 1; // flip flag
         str_len++;

@@ -17,6 +17,9 @@ typedef struct {
 
     const char* str_start;
     const char* str_end;
+    const char* null_str;
+
+    const char* null_ptr;
 
     int unwrap_optionals;           // Some("String") -> "String", None -> <Skip field>
     const char* opt_some_start;
@@ -33,6 +36,8 @@ typedef struct {
     int pretty;
     const char* indent_str;
     const char* newline;
+
+    int scape_special_ascii;
 
 
     void (*format_primitive)(

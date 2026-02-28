@@ -1,7 +1,10 @@
 TARGET      = crefl
 CC          = gcc
 
-BASE_CFLAGS = -Wall -Wextra -Werror -std=c17 -Isrc/include -m64 -MMD -MP -02
+OPT ?= 0
+
+
+BASE_CFLAGS = -Wall -Wextra -Werror -std=c17 -Isrc/include -m64 -MMD -MP -g -O$(OPT)
 CFLAGS      = $(BASE_CFLAGS) -fPIC
 AR          = ar
 ARFLAGS     = rcs
@@ -15,6 +18,8 @@ LIB_DIR     = build/lib
 CRELF_FILE  = generated_types.crefl
 PY_GEN      = python3 crefl_gen
 PY_INPUT    = $(shell find src -name "*.h") $(shell find src -name "*.c")
+
+CFLAGS += -DCREFL_FILE=\"$(CRELF_FILE)\"
 
 # --- Source discovery (exclude demo) ---
 C_FILES := $(shell find $(SRC_DIR) -name "*.c" ! -path "$(DEMO_DIR)/*")
@@ -66,7 +71,6 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@echo "Compiling -> $<"
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(DEMO_BIN): CFLAGS += -DCREFL_FILE=\"$(CRELF_FILE)\"
 $(DEMO_BIN): $(CRELF_FILE) $(DEMO_OBJ) $(SHARED_LIB) | $(BIN_DIR)
 	@echo "Linking demo -> $@"
 	$(CC) $(BASE_CFLAGS) -o $@ $(DEMO_OBJ) \

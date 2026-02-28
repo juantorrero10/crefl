@@ -15,7 +15,8 @@ typedef enum {
     DE_MEMORY_ERROR,
     DE_UNKNOWN_KEYWORD,
     DE_EXPECTED_EOF,
-    DE_EMPTY_STREAM
+    DE_EMPTY_STREAM,
+    DE_BADLY_SCAPED_STRING
 } DeserializeError;
 
 typedef struct {

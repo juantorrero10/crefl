@@ -83,11 +83,73 @@ static void str_push(char_vec* cv, const char* str) {
     cv->buff[cv->size] = '\0';
 }
 
+static void str_push_sized(char_vec* cv, const char* str, size_t sz) {
+    if (str == NULL) {
+        str_push(cv, ("(null)"));
+        return;
+    }
+
+    while (cv->size + sz + 1 > cv->cap) {
+        arena_alloc(0, cv->cap);
+        cv->cap *= 2;
+    }
+
+    memcpy(cv->buff + cv->size, str, sz);
+    cv->size += sz;
+    cv->buff[cv->size] = '\0';
+}
+
+static void char_push(char_vec* cv, int c) {
+
+    while (cv->size + 1 > cv->cap) {
+        arena_alloc(0, cv->cap);
+        cv->cap *= 2;
+    }
+    cv->buff[cv->size++] = (char)c;
+    cv->buff[cv->size] = '\0';
+}
+
+
+
 
 static void str_push_tabs(SerializePolicy* sp, char_vec* cv, int amnt) {
     for (int i = 0; i < amnt; i++)
     {
         str_push(cv, sp->indent_str);
+    }
+}
+
+static const char* _escape_lut[256] = {
+    ['\\'] = "\\\\", ['\n'] = "\\n", ['\t'] = "\\t",
+    ['\b'] = "\\b",  ['\r'] = "\\r", ['\f'] = "\\f", ['\"'] = "\\\""
+};
+
+const char* scape_search = "\\\n\t\b\r\f\"";
+
+#define MEMCPY_MIN 16
+
+static void scape_string(char_vec* cv, char* str) {
+    char* curr = str;
+    char* next_esc;
+    char* escaped;
+    size_t chunk;
+    while((next_esc = strpbrk(curr, scape_search)) != NULL) {
+        
+        chunk = (size_t)(next_esc - curr);
+        if (chunk == 0) goto __skip_copying;
+        if (chunk > MEMCPY_MIN) {
+            str_push_sized(cv, curr, chunk);
+            curr += chunk;
+        } else {
+            while(chunk) {char_push(cv, *(curr++)); chunk--;}
+        }
+__skip_copying:
+        escaped = (char*)_escape_lut[(uint32_t)(*(curr++))];
+        str_push_sized(cv, escaped, 2);
+    }
+    // copy the tail
+    if (*curr) {
+        str_push(cv, curr);
     }
 }
 
@@ -117,7 +179,19 @@ static void gc_field(SerializePolicy* sp, RField* f, void* instance, int indent,
         case K_STRING:
             char* str = *(char**)((uint8_t*)instance + f->offset);
             if (str) str_push(v, sp->str_start);
-            str_push(v, str);
+
+            if (str == NULL) {
+                if (sp->null_str) str_push(v, sp->null_str);
+                else str_push(v, NULL);
+                break;
+            }
+
+            if (sp->scape_special_ascii) {
+                scape_string(v, str);
+            } else {
+                str_push(v, str);
+            }
+
             if (str) str_push(v, sp->str_end);
             break;
         case K_OPTION:
@@ -169,6 +243,10 @@ static void gc_field(SerializePolicy* sp, RField* f, void* instance, int indent,
             gc_struct(sp, f->subtype.s, (uint8_t*)instance + f->offset, indent, v, buff2);break;
         case K_POINTER:
             void* ptr = *(void**)((uint8_t*)instance + f->offset);
+            if (ptr == NULL && sp->null_ptr) {
+                str_push(v, sp->null_ptr);
+                break;            
+            }
             snprintf(buff2, 50, "%p", ptr);
             str_push(v, buff2);
             break;
@@ -192,7 +270,7 @@ static void gc_struct(SerializePolicy* sp, RStruct* s, void* instance, int inden
         
         RField* f = s->fields[i];
         // Lookahead for NONE + unwrap_optionals
-        if (sp->unwrap_optionals) {
+        if (sp->unwrap_optionals && f->kind == K_OPTION) {
             r_option_t* o = (r_option_t*)((uint8_t*)instance + f->offset);
             if (o->opt == NONE) skip = 1;
         }
@@ -219,7 +297,7 @@ static void gc_struct(SerializePolicy* sp, RStruct* s, void* instance, int inden
 
 void* walk_type(SerializePolicy* sp, RStruct* s, void* instance) {
     if (!s) return NULL;
-    char_vec v = { .buff = arena_alloc(0, BUFFERS_INITIAL), .cap = BUFFERS_INITIAL, .size = 0 };
+    char_vec v = { .buff = arena_alloc(0, BUFFERS_INITIAL), .cap = BUFFERS_INITIAL, .size = 0};
     char buff[BUFFERS_INITIAL];
     if (sp->format_primitive == NULL) sp->format_primitive = generic_numerical_converter;
     gc_struct(sp, s, instance, 0, &v, buff);
