@@ -692,9 +692,9 @@ return_err:
  * @returns Result, either the data or an error.
  * @attention non-homogeneus arrays are not allowed for now.
  */
-DeserializeResult deserialize_json(RStruct* model, void* stream) {
+DeserializeResult deserialize_json(RStruct* model, void* stream, size_t len) {
     if (!model) return RET_ERR(DE_NULL_PTR);
-    json_walker jw = { .cur = 0, .eof = strlen((char*)stream) };
+    json_walker jw = { .cur = 0, .eof = len };
     size_t brk = arena_get_brk();
     jw.buff = stream;
     // Data structures
