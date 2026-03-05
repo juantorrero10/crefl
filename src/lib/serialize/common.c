@@ -295,14 +295,15 @@ static void gc_struct(SerializePolicy* sp, RStruct* s, void* instance, int inden
     str_push(v, sp->obj_end);
 }
 
-void* walk_type(SerializePolicy* sp, RStruct* s, void* instance) {
-    if (!s) return NULL;
+size_t walk_type(SerializePolicy* sp, RStruct* s, void* instance, void** out) {
+    if (!s) return 0;
     char_vec v = { .buff = arena_alloc(0, BUFFERS_INITIAL), .cap = BUFFERS_INITIAL, .size = 0};
     char buff[BUFFERS_INITIAL];
     if (sp->format_primitive == NULL) sp->format_primitive = generic_numerical_converter;
     gc_struct(sp, s, instance, 0, &v, buff);
     arena_dealloc(0, v.cap);
-    return strdup(v.buff);
+    if (out) *out = strdup(v.buff); 
+    return v.size;
 }
 
 

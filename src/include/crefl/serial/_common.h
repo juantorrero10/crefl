@@ -94,8 +94,7 @@ typedef union {
 
 
 void generic_numerical_converter(RPrimitive p, uint64_t bytes, void* buff, size_t sz);
-
-void* walk_type(SerializePolicy* sp, RStruct* s, void* instance);
+size_t walk_type(SerializePolicy* sp, RStruct* s, void* instance, void** out);
 
 
 #endif // SERIAL_GENERIC_WALKER_H_

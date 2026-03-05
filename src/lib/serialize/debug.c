@@ -34,7 +34,8 @@ void debug_print_struct(RStruct* s, void* instance, int __pretty) {
         .null_str = "(null)",
         .scape_special_ascii = 1
     };
-    char* out = (char*)walk_type(&sp, s, instance);
-    printf("%s\n", out);
+    char* out;
+    size_t _sz = walk_type(&sp, s, &out, instance);
+    printf("%.*s\n", (int)_sz, out);
     free(out);
 }

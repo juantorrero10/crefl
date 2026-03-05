@@ -29,6 +29,7 @@ char* deserialize_strerror(DeserializeError e);
     {\
     case '\n':__ret=1;break;\
     case ' ' :__ret=1;break;\
+    case '\r':__ret=1;break;\
     case '\t':__ret=1;break;\
     default:__ret=0;break;\
     }\
@@ -81,7 +82,7 @@ char* deserialize_strerror(DeserializeError e);
 #define currchar jw->buff[jw->cur]
 
 
-void* serialize_json(RStruct* s, RObject instance, int pretty) {
+size_t serialize_json(RStruct* s, RObject instance, void** out ,int pretty) {
     SerializePolicy sp = {
         .arr_end = " ]",
         .arr_start = "[ ",
@@ -108,7 +109,10 @@ void* serialize_json(RStruct* s, RObject instance, int pretty) {
         .null_str = "\"\"",
         .scape_special_ascii = 1
     };
-    return walk_type(&sp, s, instance);
+    if (out) {
+        return walk_type(&sp, s, instance, out);
+    }
+    return 0;
 }
 
 
