@@ -7,7 +7,7 @@
 
 #include <crefl/serial/_common.h>
 
-void debug_print_struct(RStruct* s, void* instance, int __pretty) {
+void debug_print_struct(RStruct* s, RObject instance, int __pretty) {
     SerializePolicy sp = {
         .arr_end = "]",
         .arr_start = "[",
@@ -35,7 +35,7 @@ void debug_print_struct(RStruct* s, void* instance, int __pretty) {
         .scape_special_ascii = 1
     };
     char* out;
-    size_t _sz = walk_type(&sp, s, &out, instance);
+    size_t _sz = walk_type(&sp, s, instance, (void**)&out);
     printf("%.*s\n", (int)_sz, out);
     free(out);
 }

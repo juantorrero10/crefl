@@ -728,12 +728,13 @@ DeserializeResult deserialize_json(RStruct* model, void* stream, size_t len) {
         jw.cur++;
     }
     // Trailing stuff
+    jw.cur++;
     while(skip_chars(jw.buff[jw.cur])) jw.cur++;
     
     
     if (ret.st == DR_OK) {
         // Expect EOF
-        if (jw.cur != jw.eof - 1) {
+        if (jw.cur < jw.eof) {
             arena_set_brk(brk);
             return RET_ERR(DE_EXPECTED_EOF);
         }
