@@ -127,10 +127,10 @@ static inline RPrimitive _smallest_primitive_type_unsigned(uint64_t v, uint8_t* 
 
 static inline RPrimitive _smallest_primitive_type_signed(int64_t v, uint8_t* s) {
     *s = 0;
-    if (v <= INT8_MAX)  {*s = 1;return P_I8;}
-    if (v <= INT16_MAX) {*s = 2;return P_I16;}
-    if (v <= INT32_MAX) {*s = 4;return P_I32;}
-    if (v <= INT64_MAX) {*s = 8;return P_I64;}
+    if (v <= INT8_MAX && v >= INT8_MIN)  {*s = 1;return P_I8;}
+    if (v <= INT16_MAX && v >= INT16_MIN) {*s = 2;return P_I16;}
+    if (v <= INT32_MAX && v >= INT32_MIN) {*s = 4;return P_I32;}
+    if (v <= INT64_MAX && v >= INT64_MIN) {*s = 8;return P_I64;}
     return P_U0;
 }
 
@@ -139,7 +139,7 @@ static int _json_str_to_numeric(
     size_t* _cur, 
     size_t eof,
     uint64_t* out_bytes,
-    RPrimitive* out_prim_kind  
+    RPrimitive* out_prim_kind
 ) {
     size_t start=*_cur;
     size_t cur = *_cur;
@@ -353,7 +353,13 @@ static DeserializeResult _json_dsval(
             goto reading_bool;
         } 
         return RET_ERR(DE_UNKNOWN_KEYWORD);
-
+    case 'n':
+        if (memcmp(jw->buff + jw->cur, "null", 4) == 0) {
+            bool_val = 0;
+            jw->cur += 4;
+            goto reading_null;
+        }
+        return RET_ERR(DE_UNKNOWN_KEYWORD);
     case '{':
         goto reading_struct;
 
@@ -398,6 +404,14 @@ reading_struct:
             return RET_ERR(dr.err);
         }
     }
+reading_null:
+    curr.kind = K_OPTION;
+    r_option_t r = {0};
+    if (model->kind != K_OPTION) {
+        return RET_ERR(DE_STREAM_INCOMPATIBLE);
+    }
+    refl_migrate_field(&curr, model, (uint8_t*)&r, dst, 0, 0);
+    goto finish_field;
 
 reading_bool:
     curr.kind = K_PRIMITIVE;
