@@ -503,7 +503,7 @@ diferent:
 
     else if (f_old->kind == K_STRING && f_new->kind == K_ENUM) {
         REnum* e = f_new->subtype.e;
-        const char* old_str = (const char*)src;
+        const char* old_str = *(const char**)src;
         int64_t val;
         bool found = false;
         for (size_t i = 0; i < e->n_elements; i++)
