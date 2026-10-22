@@ -42,6 +42,7 @@ void refl_destroy_field(RField* owned);
 void refl_destroy_struct(RStruct* owned);
 
 void refl_generic_destructor(RStruct* t, RObject instance);
+RObject refl_object_deepcopy(RStruct* t, const RObject instance);
 
 
 

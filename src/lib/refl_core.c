@@ -296,6 +296,11 @@ static void __field_generic_destructor(RField* f, void* src) {
         r_option_t* o = (r_option_t*)src;
         if (f->subtype.subfield->kind == K_STRING) {
             free(o->optional);
+            return;
+        }
+        if (f->kind != K_PRIMITIVE) {
+            __field_generic_destructor(f->subtype.subfield, o->optional);
+            free(o->optional);
         }
         break;
 
@@ -331,4 +336,32 @@ _RObject refl_generic_constructor(RStruct* t, ...) {
 
     va_end(params);
     return (_RObject){.type = t, .instance = NULL};
+}
+
+
+RObject refl_object_deepcopy(RStruct* t, const RObject instance) {
+    RObject out = malloc(t->total_size);
+    memcpy(out, instance, sizeof(t->total_size));
+    for (size_t i = 0; i < t->n_elements; i++)
+    {
+        RField* f = t->fields[i];
+        uint8_t* src = ((uint8_t*)instance + f->offset);
+        uint8_t* dst = ((uint8_t*)out + f->offset);
+        switch (f->kind)
+        {
+        case K_STRING:
+            *(char**)dst = strdup(*(char**)src);
+            break;
+        case K_DYN_ARRAY: {
+            r_array_t* arr = (r_array_t*)src; 
+            void* new_arr = malloc(arr->chunk_size * arr->size);
+            ((r_array_t*)dst)->array = new_arr;
+            break;
+        }        
+    
+        default:
+            break;
+        }
+    }
+    return out;
 }

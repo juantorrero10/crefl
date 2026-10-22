@@ -18,7 +18,7 @@
 #endif
 
 
-static int refl_primitive_can_promote(RPrimitive a, RPrimitive b);
+int refl_primitive_can_promote(RPrimitive from, RPrimitive to);
 
 // Compatibily by label subset
 // True if every label in the tinier enum is present in the larger one
@@ -180,7 +180,7 @@ int refl_enum_migrate_by_label(REnum* old, REnum* new, int val) {
     return -1;
 }
 
-static int refl_primitive_can_promote(RPrimitive a, RPrimitive b) {
+int refl_primitive_can_promote(RPrimitive from, RPrimitive to) {
     static const uint8_t sizes[] = {
         [P_U0]=0,
         [P_U8]=1,[P_I8]=1,
@@ -191,29 +191,29 @@ static int refl_primitive_can_promote(RPrimitive a, RPrimitive b) {
         [P_BOOL]=1
     };
 
-    if (a == b) return 1;
+    if (from == to) return 1;
 
     // int -> larger int
-    if (a <= P_I64 && b <= P_I64)
-        return sizes[a] <= sizes[b];
+    if (from <= P_I64 && to <= P_I64)
+        return sizes[from] <= sizes[to];
 
     // int -> float
-    if (a <= P_I64 && (b == P_F32 || b == P_F64))
+    if (from <= P_I64 && (to == P_F32 || to == P_F64))
         return 1;
 
     // float -> larger float
-    if ((a == P_F32 && b == P_F64))
+    if ((from == P_F32 && to == P_F64))
         return 1;
 
     // Bool -> any other, not void
-    if ((a == P_BOOL && b != P_U0)) {
+    if ((from == P_BOOL && to != P_U0)) {
         return 1;
     }
 
     return 0;
 }
 
-static void refl_primitive_convert(
+void refl_primitive_convert(
     RPrimitive from,
     RPrimitive to,
     const void* src,
@@ -312,7 +312,7 @@ static void migrate_array(
                 break;
 
             case K_STRUCT: {
-                void* nested = refl_struct_migrate(
+                void* nested = refl_migrate_struct(
                     e_old->subtype.s,
                     e_new->subtype.s,
                     src_elem
@@ -397,7 +397,7 @@ void refl_migrate_field(
             _src = *(void**)src;
         }
 
-        void* nested = refl_struct_migrate(
+        void* nested = refl_migrate_struct(
             f_old->subtype.s,
             f_new->subtype.s,
             _src
@@ -500,6 +500,25 @@ diferent:
         if (arr->chunk_size > new_size) return;
         migrate_array(f_old, f_new, arr->array, dst, f_new->size);
     }
+
+    else if (f_old->kind == K_STRING && f_new->kind == K_ENUM) {
+        REnum* e = f_new->subtype.e;
+        const char* old_str = (const char*)src;
+        int64_t val;
+        bool found = false;
+        for (size_t i = 0; i < e->n_elements; i++)
+        {
+            if (strcmp(old_str, e->names[i]) != 0) continue;
+            found = true;
+            val = e->indexes[i];
+        }
+        if (!found) return;
+        if (f_new->size == sizeof(int32_t)) {
+            *(int32_t*)dst = (int32_t)val;
+        } else {
+            *(int64_t*)dst = val;
+        }
+    }
 }
 
 
@@ -507,7 +526,7 @@ diferent:
  * Migration by name and compatible type.
  * Doesn't check compatibility; best-effort.
  */
-RObject refl_struct_migrate(RStruct* old, RStruct* new, RObject instance) {
+RObject refl_migrate_struct(RStruct* old, RStruct* new, RObject instance) {
     if (!old || !new || !instance) return NULL;
 
     uint8_t* out = calloc(1, new->total_size);

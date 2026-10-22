@@ -18,7 +18,14 @@ void refl_migrate_field(
     int wrapped_src,
     int wrapped_dst
 );
-RObject refl_struct_migrate(RStruct* old, RStruct* new, RObject instance);
+RObject refl_migrate_struct(RStruct* old, RStruct* new, RObject instance);
 
+int refl_primitive_can_promote(RPrimitive from, RPrimitive to);
+void refl_primitive_convert(
+    RPrimitive from,
+    RPrimitive to,
+    const void* src,
+    void* dst
+);
 
 #endif // PUBLIC_CMP_H_

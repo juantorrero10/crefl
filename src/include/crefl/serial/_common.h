@@ -3,6 +3,8 @@
 
 #include <crefl/types.h>
 
+
+
 typedef struct {
 
     const char* obj_start;
@@ -71,6 +73,18 @@ typedef struct {
     size_t capacity;
 } unordered_buffer;
 
+typedef struct {
+    uint8_t* buff;
+    size_t cur;
+    size_t eof;
+} stream_walker;
+
+int generic_str_to_numeric(
+    stream_walker* sw,
+    uint64_t* out_bytes,
+    RPrimitive* out_prim_kind
+);
+
 temp_field_pool _fp_init(int n_arena, size_t initial);
 void _fp_append(temp_field_pool* fp, RField* f);
 void _fp_free(temp_field_pool* fp);
@@ -92,8 +106,11 @@ typedef union {
     double f;
 } any_t;
 
+#define RET_ERR(_err) (DeserializeResult){.st = DR_ERR, .err = _err, .data.err_str=deserialize_strerror(_err)}
+#define RET_OK(_ptr) (DeserializeResult){.st = DR_OK, .data.buff = _ptr}
 
-void generic_numerical_converter(RPrimitive p, uint64_t bytes, void* buff, size_t sz);
+
+void generic_numeric_to_str(RPrimitive p, uint64_t bytes, void* buff, size_t sz);
 size_t walk_type(SerializePolicy* sp, RStruct* s, RObject instance, void** out);
 
 

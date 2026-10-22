@@ -2,16 +2,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <ctype.h>
 
 #include <crefl/types.h>
 #include <crefl/core.h>
 
 #include <crefl/serial/_common.h>
 #include <_arena.h>
-
 #define BUFFERS_INITIAL 64
 
-void generic_numerical_converter(RPrimitive p, uint64_t bytes, void* buff, size_t sz) {
+void generic_numeric_to_str(RPrimitive p, uint64_t bytes, void* buff, size_t sz) {
     switch (p)
     {
     case P_BOOL:
@@ -58,6 +59,99 @@ void generic_numerical_converter(RPrimitive p, uint64_t bytes, void* buff, size_
     default:
         break;
     }
+}
+
+
+static inline RPrimitive _smallest_primitive_type_unsigned(uint64_t v, uint8_t* s) {
+    *s = 0;
+    if (v <= UINT8_MAX)  {*s = 1;return P_U8;}
+    if (v <= UINT16_MAX) {*s = 2;return P_U16;}
+    if (v <= UINT32_MAX) {*s = 4;return P_U32;}
+    if (v <= UINT64_MAX) {*s = 8;return P_U64;}
+    return P_U0;
+}
+
+static inline RPrimitive _smallest_primitive_type_signed(int64_t v, uint8_t* s) {
+    *s = 0;
+    if (v <= INT8_MAX && v >= INT8_MIN)  {*s = 1;return P_I8;}
+    if (v <= INT16_MAX && v >= INT16_MIN) {*s = 2;return P_I16;}
+    if (v <= INT32_MAX && v >= INT32_MIN) {*s = 4;return P_I32;}
+    if (v <= INT64_MAX && v >= INT64_MIN) {*s = 8;return P_I64;}
+    return P_U0;
+}
+
+int generic_str_to_numeric(
+    stream_walker* sw,
+    uint64_t* out_bytes,
+    RPrimitive* out_prim_kind
+) {
+    size_t start= sw->cur;
+    size_t cur = sw->cur;
+    size_t eof = sw->eof;
+    uint8_t* buff = sw->buff;
+    uint8_t is_float=0;
+    uint8_t sign_bit=0;
+
+    // Strategy: look head to figure out if its int or float
+    if (cur < eof) {
+        if (buff[cur] == '+') cur++;
+        else if (buff[cur]=='-'){sign_bit=1;cur++;} 
+    }
+
+    while(cur < eof && isdigit(buff[cur])) cur++;
+
+    // set to float and skip until digits end
+    if (cur < eof && buff[cur] == '.') {
+        is_float = 1;
+        cur++;
+        while(cur < eof && isdigit(buff[cur])) cur++;
+    }
+
+    // Handle exponent
+    if (cur < eof && (
+        buff[cur] == 'e' || buff[cur] == 'E'
+    )) {
+        is_float = 1;
+        cur++;
+        while(cur < eof && isdigit(buff[cur])) cur++;
+    }
+
+    // cur should point at the end of the ASCII representation by now.
+    sw->cur = cur;
+    char* extracted = arena_alloc(0, cur - start + 1);
+    memcpy(extracted, buff + start, cur - start);
+    uint8_t s;
+    errno = 0;
+
+    if (is_float) {
+        double d = strtod((const char*)extracted, NULL);
+        if (errno) return 0;
+        float f = (float)d;
+        // Return P_F32 if lossless
+        if (f == d) {
+            *out_prim_kind = P_F32;
+            memset(out_bytes, 0, sizeof(uint64_t));
+            memcpy(out_bytes, &f, sizeof(float));
+        } else {
+            *out_prim_kind = P_F64;
+            memset(out_bytes, 0, sizeof(uint64_t));
+            memcpy(out_bytes, &d, sizeof(double));
+        }
+    } else if (sign_bit) {
+        int64_t v = strtol((char*)extracted, NULL, 10);
+        if (errno) return 0;
+        *out_prim_kind = _smallest_primitive_type_signed(v, &s);
+        memset(out_bytes, 0, sizeof(uint64_t));
+        memcpy(out_bytes, &v, s);
+    } else {
+        uint64_t v = strtoul((char*)extracted, NULL, 10);
+        if (errno) return 0;
+        *out_prim_kind = _smallest_primitive_type_unsigned(v, &s);
+        memset(out_bytes, 0, sizeof(uint64_t));
+        memcpy(out_bytes, &v, s);
+    }
+    arena_dealloc(0, cur - start + 1);
+    return 1;
 }
 
 typedef struct {
@@ -231,7 +325,10 @@ static void gc_field(SerializePolicy* sp, RField* f, void* instance, int indent,
             if (sp->enum_as_string) {
                 int val;
                 memcpy(&val, (uint8_t*)instance + f->offset, sizeof(int));
-                str_push(v, (char*)refl_enum_get_label(f->subtype.e, val));
+                const char* lbl = refl_enum_get_label(f->subtype.e, val);
+                str_push(v, sp->str_start);
+                str_push(v, lbl);
+                str_push(v, sp->str_end);
             } else {
                 uint64_t raw;
                 load_numeric_bytes(f, instance, &raw);
@@ -299,7 +396,7 @@ size_t walk_type(SerializePolicy* sp, RStruct* s, void* instance, void** out) {
     if (!s) return 0;
     char_vec v = { .buff = arena_alloc(0, BUFFERS_INITIAL), .cap = BUFFERS_INITIAL, .size = 0};
     char buff[BUFFERS_INITIAL];
-    if (sp->format_primitive == NULL) sp->format_primitive = generic_numerical_converter;
+    if (sp->format_primitive == NULL) sp->format_primitive = generic_numeric_to_str;
     gc_struct(sp, s, instance, 0, &v, buff);
     arena_dealloc(0, v.cap);
     if (out) *out = strdup(v.buff); 

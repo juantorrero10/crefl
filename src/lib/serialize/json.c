@@ -17,8 +17,6 @@
 #include <_arena.h>
 
 
-char* deserialize_strerror(DeserializeError e);
-
 #define MAX(a, b) ((a) > (b))? (a) : (b)
 #define MIN(a, b) ((a) < (b))? (a) : (b)
 #define MIN3(a, b, c) MIN(MIN(a, b), c)
@@ -72,8 +70,7 @@ char* deserialize_strerror(DeserializeError e);
 
 
 
-#define RET_ERR(_err) (DeserializeResult){.st = DR_ERR, .err = _err, .data.err_str=deserialize_strerror(_err)}
-#define RET_OK(_ptr) (DeserializeResult){.st = DR_OK, .data.buff = _ptr}
+
 
 
 #define ARRAY_SIZE_INITIAL 8
@@ -87,9 +84,9 @@ size_t serialize_json(RStruct* s, RObject instance, void** out ,int pretty) {
         .arr_end = " ]",
         .arr_start = "[ ",
         .arr_sep = ", ",
-        .enum_as_string = 0,
+        .enum_as_string = 1,
         .field_sep = ", ",
-        .format_primitive = generic_numerical_converter,
+        .format_primitive = generic_numeric_to_str,
         .indent_str = "    ",
         .key_end = "\"",
         .key_start = "\"",
@@ -116,103 +113,6 @@ size_t serialize_json(RStruct* s, RObject instance, void** out ,int pretty) {
 }
 
 
-static inline RPrimitive _smallest_primitive_type_unsigned(uint64_t v, uint8_t* s) {
-    *s = 0;
-    if (v <= UINT8_MAX)  {*s = 1;return P_U8;}
-    if (v <= UINT16_MAX) {*s = 2;return P_U16;}
-    if (v <= UINT32_MAX) {*s = 4;return P_U32;}
-    if (v <= UINT64_MAX) {*s = 8;return P_U64;}
-    return P_U0;
-}
-
-static inline RPrimitive _smallest_primitive_type_signed(int64_t v, uint8_t* s) {
-    *s = 0;
-    if (v <= INT8_MAX && v >= INT8_MIN)  {*s = 1;return P_I8;}
-    if (v <= INT16_MAX && v >= INT16_MIN) {*s = 2;return P_I16;}
-    if (v <= INT32_MAX && v >= INT32_MIN) {*s = 4;return P_I32;}
-    if (v <= INT64_MAX && v >= INT64_MIN) {*s = 8;return P_I64;}
-    return P_U0;
-}
-
-static int _json_str_to_numeric(
-    uint8_t* buff, 
-    size_t* _cur, 
-    size_t eof,
-    uint64_t* out_bytes,
-    RPrimitive* out_prim_kind
-) {
-    size_t start=*_cur;
-    size_t cur = *_cur;
-    uint8_t is_float=0;
-    uint8_t sign_bit=0;
-
-    // Strategy: look head to figure out if its int or float
-    if (cur < eof) {
-        if (buff[cur] == '+') cur++;
-        else if (buff[cur]=='-'){sign_bit=1;cur++;} 
-    }
-
-    while(cur < eof && isdigit(buff[cur])) cur++;
-
-    // set to float and skip until digits end
-    if (cur < eof && buff[cur] == '.') {
-        is_float = 1;
-        cur++;
-        while(cur < eof && isdigit(buff[cur])) cur++;
-    }
-
-    // Handle exponent
-    if (cur < eof && (
-        buff[cur] == 'e' || buff[cur] == 'E'
-    )) {
-        is_float = 1;
-        cur++;
-        while(cur < eof && isdigit(buff[cur])) cur++;
-    }
-
-    // cur should point at the end of the ASCII representation by now.
-    *_cur = cur;
-    char* extracted = arena_alloc(0, cur - start + 1);
-    memcpy(extracted, buff + start, cur - start);
-    uint8_t s;
-    errno = 0;
-
-    if (is_float) {
-        double d = strtod((const char*)extracted, NULL);
-        if (errno) return 0;
-        float f = (float)d;
-        // Return P_F32 if lossless
-        if (f == d) {
-            *out_prim_kind = P_F32;
-            memset(out_bytes, 0, sizeof(uint64_t));
-            memcpy(out_bytes, &f, sizeof(float));
-        } else {
-            *out_prim_kind = P_F64;
-            memset(out_bytes, 0, sizeof(uint64_t));
-            memcpy(out_bytes, &d, sizeof(double));
-        }
-    } else if (sign_bit) {
-        int64_t v = strtol((char*)extracted, NULL, 10);
-        if (errno) return 0;
-        *out_prim_kind = _smallest_primitive_type_signed(v, &s);
-        memset(out_bytes, 0, sizeof(uint64_t));
-        memcpy(out_bytes, &v, s);
-    } else {
-        uint64_t v = strtoul((char*)extracted, NULL, 10);
-        if (errno) return 0;
-        *out_prim_kind = _smallest_primitive_type_unsigned(v, &s);
-        memset(out_bytes, 0, sizeof(uint64_t));
-        memcpy(out_bytes, &v, s);
-    }
-    arena_dealloc(0, cur - start + 1);
-    return 1;
-}
-
-typedef struct {
-    uint8_t* buff;
-    size_t cur;
-    size_t eof;
-} json_walker;
 
 struct _json_nesting_stack {
     uint8_t stack[512];
@@ -300,7 +200,7 @@ static RField* _json_is_name_present(
 
 static DeserializeResult _json_dsobj(
     RStruct* model,
-    json_walker* jw, 
+    stream_walker* jw, 
     struct _json_nesting_stack* jss,
     size_t offset,
     unordered_buffer* instance
@@ -308,7 +208,7 @@ static DeserializeResult _json_dsobj(
 
 static DeserializeResult _json_dsarr(
     RField* array,
-    json_walker* jw, 
+    stream_walker* jw, 
     struct _json_nesting_stack* jss,
     size_t offset,
     unordered_buffer* instance
@@ -316,7 +216,7 @@ static DeserializeResult _json_dsarr(
 
 static DeserializeResult _json_dsval(
     RField* model,
-    json_walker* jw,
+    stream_walker* jw,
     struct _json_nesting_stack* jss,
     size_t offset,
     unordered_buffer* instance,
@@ -424,10 +324,8 @@ reading_bool:
 
 reading_numeric:
     curr.kind = K_PRIMITIVE;
-    if (_json_str_to_numeric(
-        jw->buff,
-        &jw->cur,
-        jw->eof,
+    if (generic_str_to_numeric(
+        jw,
         &raw,
         &curr.subtype.prim
     ) == 0) { 
@@ -444,7 +342,7 @@ reading_numeric:
 reading_string:
     curr.kind = K_STRING;
     curr.size = 1;
-    if (!refl_comp_field_schema(&curr, model)) 
+    if (model->kind != K_ENUM && !refl_comp_field_schema(&curr, model)) 
         return RET_ERR(DE_STREAM_INCOMPATIBLE);
     // Unused subtype
     while (jw->cur < jw->eof) {
@@ -455,6 +353,10 @@ reading_string:
             jw->cur++;
             char* final_string = _json_descape_string((char*)str, str_len);
             if (!final_string) return RET_ERR(DE_BADLY_SCAPED_STRING);
+            if (model->kind == K_ENUM) {
+                if (!refl_enum_has_label(model->subtype.e, final_string))
+                    return RET_ERR(DE_LABEL_NOT_FOUND);
+            }
             refl_migrate_field(&curr, model, (uint8_t*)&final_string, dst, 0, wrapped_dst);
             arena_dealloc(0, str_len + 1);
             goto finish_field;
@@ -479,7 +381,7 @@ finish_field:
  */
 static DeserializeResult _json_dsarr(
     RField* array,
-    json_walker* jw, 
+    stream_walker* jw, 
     struct _json_nesting_stack* jss,
     size_t offset,
     unordered_buffer* instance
@@ -560,7 +462,7 @@ static DeserializeResult _json_dsarr(
  */
 static DeserializeResult _json_dsobj(
     RStruct* model,
-    json_walker* jw, 
+    stream_walker* jw, 
     struct _json_nesting_stack* jss,
     size_t offset,
     unordered_buffer* instance
@@ -712,7 +614,7 @@ return_err:
  */
 DeserializeResult deserialize_json(RStruct* model, void* stream, size_t len) {
     if (!model) return RET_ERR(DE_NULL_PTR);
-    json_walker jw = { .cur = 0, .eof = len };
+    stream_walker jw = { .cur = 0, .eof = len };
     size_t brk = arena_get_brk();
     jw.buff = stream;
     // Data structures

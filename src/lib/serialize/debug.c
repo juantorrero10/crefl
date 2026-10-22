@@ -14,7 +14,7 @@ void debug_print_struct(RStruct* s, RObject instance, int __pretty) {
         .arr_sep = ", ",
         .enum_as_string = 1,
         .field_sep = ", ",
-        .format_primitive = generic_numerical_converter,
+        .format_primitive = generic_numeric_to_str,
         .indent_str = "    ",
         .key_end = NULL,
         .key_start = NULL,

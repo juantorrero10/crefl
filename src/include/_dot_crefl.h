@@ -32,7 +32,7 @@ typedef struct CREFL_PACKED
  * When an attribute requires an arbitrary amount 
  * of references to something it employs the INDEX_TABLE
  * An entry to the table is simply the offset / 4 from the start of the section.
- * The meaning of these indexes are dependent on the employer.
+ * The meaning of these indexes are arbitrary.
  * 
  *    index0     index1       index2     index3
  * AA AA AA AA BB BB BB BB CC CC CC CC DD DD DD DD
@@ -115,6 +115,9 @@ typedef struct CREFL_PACKED {
     uint32_t n_elements;
 } CREFL_Enum;
 
+
+// Kind of a linked list node containing the offset to the next hashtable
+// This is just before the actual hashtable
 typedef struct CREFL_PACKED {
     uint32_t n_elements;           
     uint32_t next_hash_table_offset;  // From start of section

@@ -16,7 +16,10 @@ typedef enum {
     DE_UNKNOWN_KEYWORD,
     DE_EXPECTED_EOF,
     DE_EMPTY_STREAM,
-    DE_BADLY_SCAPED_STRING
+    DE_BADLY_SCAPED_STRING,
+    DE_LABEL_NOT_FOUND,
+    DE_ARRAY_TOO_BIG,
+    DE_TARGET_TYPE_TOO_COMPLEX,
 } DeserializeError;
 
 typedef struct {
@@ -28,6 +31,8 @@ typedef struct {
         void* buff;
     } data;
 } DeserializeResult;
+
+char* deserialize_strerror(DeserializeError e);
 
 
 #endif // SERIAL_ERR_H_

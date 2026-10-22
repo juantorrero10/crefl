@@ -37,6 +37,12 @@ char* deserialize_strerror(DeserializeError e) {
         return "Empty stream.";
     case DE_BADLY_SCAPED_STRING:
         return "Stream contained a badly scaped string.";
+    case DE_LABEL_NOT_FOUND:
+        return "Could not convert from string to enumeration because the target enum type did not have that label.";
+    case DE_ARRAY_TOO_BIG:
+        return "Stream contained an array that was bigger than the model specified.";
+    case DE_TARGET_TYPE_TOO_COMPLEX:
+        return "Try to deserialize to a type more complex than what the formats supports.";
     default:
         return "";
     }
