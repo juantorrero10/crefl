@@ -2,13 +2,17 @@
 set -euo pipefail
 
 # ---- Config ----
-OUT_DIR="${1:-./extracted}"
+OUT_DIR="./extracted"
 SRC_DIR="src"
 GEN_DIR="crefl_gen"
 LIB_PATH="build/lib/libcrefl.a"   # <- adjust if needed
 
 echo "==> Building project"
-make static -j4 OPT=3
+if [[ $# -gt 0 ]]; then 
+    make static -j4 OPT=$1
+else
+    make static -j4 OPT=3
+fi
 
 echo "==> Preparing output directory: $OUT_DIR"
 rm -rf "$OUT_DIR"

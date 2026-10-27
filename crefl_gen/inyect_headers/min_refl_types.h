@@ -1,8 +1,30 @@
 #ifndef MIN_REFL_TYPES_H_
 #define MIN_REFL_TYPES_H_
 #define REFLECT(type) typedef type
-#define OPTION(type) r_option_t
+#define DECL_OPTION(type) typedef struct { bool is_some; type data; } __OPTION_##type##_DECL__
+#define DECL_OPTION_DYN_ARRAY(type) typedef struct { bool is_some; r_array_t arr; } __OPTION_DA_##type##_DECL__
+#define DECL_OPTION_FIXED_ARRAY(type, N) typedef struct { bool is_some; type arr[N]; } __OPTION_FA_##type##_##N##_DECL__
+#define OPTION(type) __OPTION_##type##_DECL__
+#define OPTION_DYN_ARRAY(type) __OPTION_DA_##type##_DECL__
+#define OPTION_FIXED_ARRAY(type, N) __OPTION_FA_##type##_##N##_DECL__
 #define DYN_ARRAY(type) r_array_t
+
+REFLECT(struct) {
+    char* data;
+} strZ;
+
+DECL_OPTION(strZ);
+DECL_OPTION(bool);
+DECL_OPTION(u8);
+DECL_OPTION(i8);
+DECL_OPTION(u16);
+DECL_OPTION(i16);
+DECL_OPTION(u32);
+DECL_OPTION(i32);
+DECL_OPTION(u64);
+DECL_OPTION(i64);
+DECL_OPTION(float);
+DECL_OPTION(double);
 
 REFLECT(enum) {
     NONE,

@@ -79,7 +79,7 @@ static DeserializeResult qp_read_val(
     RField* restrict f, 
     stream_walker* restrict sw,
     size_t* restrict key_freqs, 
-    uint8_t* restrict write_to,
+    u8* restrict write_to,
     bool wrapped_type
 ) {
     RField new_field = {0};
@@ -128,10 +128,10 @@ reading_string:
         if (!refl_enum_has_label(f->subtype.e, alloced_dst))
             return RET_ERR(DE_LABEL_NOT_FOUND);
     }
-    refl_migrate_field(&new_field, f, (uint8_t*)&alloced_dst, dst, 0, f->kind == K_OPTION);
+    refl_migrate_field(&new_field, f, (u8*)&alloced_dst, dst, 0, f->kind == K_OPTION);
 reading_num:
     new_field.kind = K_PRIMITIVE;
-    uint64_t out_bytes;
+    u64 out_bytes;
     if (generic_str_to_numeric(
         sw,
         &out_bytes,
@@ -151,7 +151,7 @@ static DeserializeResult qp_read_pair(
     RStruct* restrict model, 
     stream_walker* restrict sw,
     size_t* restrict key_freqs, 
-    uint8_t* restrict instance,
+    u8* restrict instance,
     size_t non_optional_counter
 ) {
     DeserializeError de;
@@ -172,7 +172,7 @@ read_key_name:
     if (!field)
         return RET_ERR(DE_LABEL_NOT_FOUND);
 
-    uint8_t* write_to = instance + field->offset;
+    u8* write_to = instance + field->offset;
     RField* dst_field = field; 
     int unwrapped = 0;
     key_freqs[f_idx]++;
@@ -234,7 +234,7 @@ DeserializeResult deserialize_query(RStruct* restrict model, void* restrict stre
     if (!model || stream_len == 0) return RET_ERR(DE_NULL_PTR);
     stream_walker sw = { .buff = stream, .cur = 0, .eof = stream_len };
     size_t brk = arena_get_brk();
-    uint8_t* instance = arena_alloc(0, model->total_size);
+    u8* instance = arena_alloc(0, model->total_size);
     size_t* key_freqs = arena_alloc(0, sizeof(size_t) * model->n_elements);
     memset(key_freqs, 0, sizeof(size_t) * model->total_size);
     

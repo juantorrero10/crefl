@@ -4,6 +4,7 @@
 #include <string.h>
 #include <errno.h>
 #include <ctype.h>
+#include <stdint.h>
 
 #include <crefl/types.h>
 #include <crefl/core.h>
@@ -12,7 +13,7 @@
 #include <_arena.h>
 #define BUFFERS_INITIAL 64
 
-void generic_numeric_to_str(RPrimitive p, uint64_t bytes, void* buff, size_t sz) {
+void generic_numeric_to_str(RPrimitive p, u64 bytes, void* buff, size_t sz) {
     switch (p)
     {
     case P_BOOL:
@@ -25,35 +26,35 @@ void generic_numeric_to_str(RPrimitive p, uint64_t bytes, void* buff, size_t sz)
         snprintf(buff, sz, "<no_val>");
         break;
     case P_U8:
-        snprintf(buff, sz, "%hhu", (uint8_t)(bytes & 0xFF));
+        snprintf(buff, sz, "%hhu", (u8)(bytes & 0xFF));
         break;
     case P_I8:
-        snprintf(buff, sz, "%hhd", (int8_t)(bytes));
+        snprintf(buff, sz, "%hhd", (i8)(bytes));
         break;
     case P_U16:
-        snprintf(buff, sz, "%hu", (uint16_t)(bytes & 0xFFFF));
+        snprintf(buff, sz, "%hu", (u16)(bytes & 0xFFFF));
         break;
     case P_I16:
-        snprintf(buff, sz, "%hd", (int16_t)(bytes));
+        snprintf(buff, sz, "%hd", (i16)(bytes));
         break;
     case P_U32:
-        snprintf(buff, sz, "%u", (uint32_t)(bytes & 0xFFFFFFFF));
+        snprintf(buff, sz, "%u", (u32)(bytes & 0xFFFFFFFF));
         break;
     case P_I32:
-        snprintf(buff, sz, "%d", (int32_t)(bytes));
+        snprintf(buff, sz, "%d", (i32)(bytes));
         break;
     case P_U64:
         snprintf(buff, sz, "%lu", (bytes));
         break;
     case P_I64:
-        snprintf(buff, sz, "%ld", (int64_t)bytes);
+        snprintf(buff, sz, "%ld", (i64)bytes);
         break;
     case P_F32:
-        union { uint32_t u; float f; } v = { .u = (uint32_t)bytes };
+        union { u32 u; float f; } v = { .u = (u32)bytes };
         snprintf(buff, sz, "%f", v.f);
         break;
     case P_F64:
-        union { uint64_t u; double d; } v2 = { .u = bytes };
+        union { u64 u; double d; } v2 = { .u = bytes };
         snprintf(buff, sz, "%lf", v2.d);
         break;
     default:
@@ -62,7 +63,7 @@ void generic_numeric_to_str(RPrimitive p, uint64_t bytes, void* buff, size_t sz)
 }
 
 
-static inline RPrimitive _smallest_primitive_type_unsigned(uint64_t v, uint8_t* s) {
+static inline RPrimitive _smallest_primitive_type_unsigned(u64 v, u8* s) {
     *s = 0;
     if (v <= UINT8_MAX)  {*s = 1;return P_U8;}
     if (v <= UINT16_MAX) {*s = 2;return P_U16;}
@@ -71,7 +72,7 @@ static inline RPrimitive _smallest_primitive_type_unsigned(uint64_t v, uint8_t* 
     return P_U0;
 }
 
-static inline RPrimitive _smallest_primitive_type_signed(int64_t v, uint8_t* s) {
+static inline RPrimitive _smallest_primitive_type_signed(i64 v, u8* s) {
     *s = 0;
     if (v <= INT8_MAX && v >= INT8_MIN)  {*s = 1;return P_I8;}
     if (v <= INT16_MAX && v >= INT16_MIN) {*s = 2;return P_I16;}
@@ -82,15 +83,15 @@ static inline RPrimitive _smallest_primitive_type_signed(int64_t v, uint8_t* s) 
 
 int generic_str_to_numeric(
     stream_walker* sw,
-    uint64_t* out_bytes,
+    u64* out_bytes,
     RPrimitive* out_prim_kind
 ) {
     size_t start= sw->cur;
     size_t cur = sw->cur;
     size_t eof = sw->eof;
-    uint8_t* buff = sw->buff;
-    uint8_t is_float=0;
-    uint8_t sign_bit=0;
+    u8* buff = sw->buff;
+    u8 is_float=0;
+    u8 sign_bit=0;
 
     // Strategy: look head to figure out if its int or float
     if (cur < eof) {
@@ -120,7 +121,7 @@ int generic_str_to_numeric(
     sw->cur = cur;
     char* extracted = arena_alloc(0, cur - start + 1);
     memcpy(extracted, buff + start, cur - start);
-    uint8_t s;
+    u8 s;
     errno = 0;
 
     if (is_float) {
@@ -130,24 +131,24 @@ int generic_str_to_numeric(
         // Return P_F32 if lossless
         if (f == d) {
             *out_prim_kind = P_F32;
-            memset(out_bytes, 0, sizeof(uint64_t));
+            memset(out_bytes, 0, sizeof(u64));
             memcpy(out_bytes, &f, sizeof(float));
         } else {
             *out_prim_kind = P_F64;
-            memset(out_bytes, 0, sizeof(uint64_t));
+            memset(out_bytes, 0, sizeof(u64));
             memcpy(out_bytes, &d, sizeof(double));
         }
     } else if (sign_bit) {
-        int64_t v = strtol((char*)extracted, NULL, 10);
+        i64 v = strtol((char*)extracted, NULL, 10);
         if (errno) return 0;
         *out_prim_kind = _smallest_primitive_type_signed(v, &s);
-        memset(out_bytes, 0, sizeof(uint64_t));
+        memset(out_bytes, 0, sizeof(u64));
         memcpy(out_bytes, &v, s);
     } else {
-        uint64_t v = strtoul((char*)extracted, NULL, 10);
+        u64 v = strtoul((char*)extracted, NULL, 10);
         if (errno) return 0;
         *out_prim_kind = _smallest_primitive_type_unsigned(v, &s);
-        memset(out_bytes, 0, sizeof(uint64_t));
+        memset(out_bytes, 0, sizeof(u64));
         memcpy(out_bytes, &v, s);
     }
     arena_dealloc(0, cur - start + 1);
@@ -238,7 +239,7 @@ static void scape_string(char_vec* cv, char* str) {
             while(chunk) {char_push(cv, *(curr++)); chunk--;}
         }
 __skip_copying:
-        escaped = (char*)_escape_lut[(uint32_t)(*(curr++))];
+        escaped = (char*)_escape_lut[(u32)(*(curr++))];
         str_push_sized(cv, escaped, 2);
     }
     // copy the tail
@@ -247,9 +248,9 @@ __skip_copying:
     }
 }
 
-static void load_numeric_bytes(RField* f, void* instance, uint64_t* out) {
+static void load_numeric_bytes(RField* f, void* instance, u64* out) {
     *out = 0UL;
-    memcpy(out, (uint8_t*)instance + f->offset, refl_prim_to_size(f->subtype.prim));
+    memcpy(out, (u8*)instance + f->offset, refl_prim_to_size(f->subtype.prim));
 }
 
 
@@ -258,20 +259,19 @@ static void gc_struct(SerializePolicy* sp, RStruct* s, void* instance, int inden
 
 
 static void gc_field(SerializePolicy* sp, RField* f, void* instance, int indent, char_vec* v, char* buff2) {
-    r_option_t* o;
     r_array_t* a;
     
     switch (f->kind)
         {
         case K_PRIMITIVE:
-            uint64_t raw;
+            u64 raw;
             load_numeric_bytes(f, instance, &raw);
             sp->format_primitive(f->subtype.prim, raw, buff2, 50);
             str_push(v, buff2);
             break;
 
         case K_STRING:
-            char* str = *(char**)((uint8_t*)instance + f->offset);
+            char* str = *(char**)((u8*)instance + f->offset);
             if (str) str_push(v, sp->str_start);
 
             if (str == NULL) {
@@ -289,26 +289,23 @@ static void gc_field(SerializePolicy* sp, RField* f, void* instance, int indent,
             if (str) str_push(v, sp->str_end);
             break;
         case K_OPTION:
-            o = (r_option_t*)((uint8_t*)instance + f->offset);
-            if (sp->unwrap_optionals && o->opt == NONE) return;
-            if (o->opt == SOME) {
-                if (!sp->unwrap_optionals)str_push(v, sp->opt_some_start);
-                if (f->subtype.subfield->kind == K_STRUCT || 
-                    f->subtype.subfield->kind == K_UNION) {
-                    gc_field(sp, f->subtype.subfield, o->optional, indent, v, buff2);
+            {
+                void* option_value = (u8*)instance + f->offset;
+                if (sp->unwrap_optionals && !refl_option_is_some(option_value)) return;
+                if (refl_option_is_some(option_value)) {
+                    if (!sp->unwrap_optionals)str_push(v, sp->opt_some_start);
+                    gc_field(sp, f->subtype.subfield, option_value, indent, v, buff2);
+                    if (!sp->unwrap_optionals)str_push(v, sp->opt_some_end);
                 } else {
-                    gc_field(sp, f->subtype.subfield, (void*)&o->optional, indent, v, buff2);
+                    str_push(v, sp->opt_none);
                 }
-                if (!sp->unwrap_optionals)str_push(v, sp->opt_some_end);
-            } else {
-                str_push(v, sp->opt_none);
             }break;
         case K_DYN_ARRAY:
-            a = (r_array_t*)((uint8_t*)instance + f->offset);
+            a = (r_array_t*)((u8*)instance + f->offset);
             str_push(v, sp->arr_start);
             for (size_t i = 0; i < a->size; i++)
             {
-                gc_field(sp, f->subtype.subfield, (void*)((uint8_t*)a->array + (i * a->chunk_size)), indent, v, buff2);
+                gc_field(sp, f->subtype.subfield, (void*)((u8*)a->array + (i * a->chunk_size)), indent, v, buff2);
                 if (i != a->size - 1) str_push(v, sp->arr_sep);
             }
             str_push(v, sp->arr_end);break;
@@ -317,29 +314,29 @@ static void gc_field(SerializePolicy* sp, RField* f, void* instance, int indent,
 
             for (size_t i = 0; i < f->size; i++)
             {
-                gc_field(sp, f->subtype.subfield, (uint8_t*)instance + f->offset + (i * refl_get_field_size(f->subtype.subfield)), indent, v, buff2);
+                gc_field(sp, f->subtype.subfield, (u8*)instance + f->offset + (i * refl_get_field_size(f->subtype.subfield)), indent, v, buff2);
                 if (i != f->size - 1) str_push(v, sp->arr_sep);
             }
             str_push(v, sp->arr_end);break;
         case K_ENUM:
             if (sp->enum_as_string) {
                 int val;
-                memcpy(&val, (uint8_t*)instance + f->offset, sizeof(int));
+                memcpy(&val, (u8*)instance + f->offset, sizeof(int));
                 const char* lbl = refl_enum_get_label(f->subtype.e, val);
                 str_push(v, sp->str_start);
                 str_push(v, lbl);
                 str_push(v, sp->str_end);
             } else {
-                uint64_t raw;
+                u64 raw;
                 load_numeric_bytes(f, instance, &raw);
                 sp->format_primitive(f->subtype.prim, raw, buff2, 50);
                 str_push(v, buff2);
             }
             break;
         case K_STRUCT:
-            gc_struct(sp, f->subtype.s, (uint8_t*)instance + f->offset, indent, v, buff2);break;
+            gc_struct(sp, f->subtype.s, (u8*)instance + f->offset, indent, v, buff2);break;
         case K_POINTER:
-            void* ptr = *(void**)((uint8_t*)instance + f->offset);
+            void* ptr = *(void**)((u8*)instance + f->offset);
             if (ptr == NULL && sp->null_ptr) {
                 str_push(v, sp->null_ptr);
                 break;            
@@ -368,8 +365,8 @@ static void gc_struct(SerializePolicy* sp, RStruct* s, void* instance, int inden
         RField* f = s->fields[i];
         // Lookahead for NONE + unwrap_optionals
         if (sp->unwrap_optionals && f->kind == K_OPTION) {
-            r_option_t* o = (r_option_t*)((uint8_t*)instance + f->offset);
-            if (o->opt == NONE) skip = 1;
+            void* option_value = (u8*)instance + f->offset;
+            if (!refl_option_is_some(option_value)) skip = 1;
         }
         if (!skip) {
             if (sp->pretty) str_push_tabs(sp, v,indent);
@@ -442,7 +439,7 @@ void _gal_append(g_arraylist_t* gal, void* object) {
         arena_alloc(gal->n_arena, gal->chunk_size);
         gal->capacity += 1;
     }
-    memcpy(&((uint8_t*)gal->data)[gal->size++ * gal->chunk_size], object, gal->chunk_size);
+    memcpy(&((u8*)gal->data)[gal->size++ * gal->chunk_size], object, gal->chunk_size);
 }
 
 

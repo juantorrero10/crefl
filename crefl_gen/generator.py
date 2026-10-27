@@ -2,6 +2,7 @@ import parser
 import os
 import pycparser as pc
 import re
+import prober
 import subprocess as sb
 import hashlib
 import shutil
@@ -18,16 +19,19 @@ class CReflEngine:
         self.hints_enum = []
         self.hints_struct = {}
         self.hints_union = {}
+        self.option_hints = {}
         self.checksum = checksum
         
     def generate(self, output_file: str):
         for header in self.headers:
             enums = self._extract_enum_hints(header)
             structs, unions = self._extract_struct_union_hints(header)
+            options = self._extract_option_hints(header)
 
             self.hints_enum.extend(enums)
             self.hints_struct.update(structs)
             self.hints_union.update(unions)
+            self.option_hints.update(options)
 
         new_cs, out_h = self._expand_headers()
         if out_h is None: return None, None
@@ -38,44 +42,79 @@ class CReflEngine:
         shutil.rmtree(TEMP_WD)
         
     def _parse_header(self, dot_h_path: str):
-        ast = pc.parse_file(dot_h_path)
-        v = parser.ReflVisitor( 
-            dot_h_path,
-            enum_hints=self.hints_enum, 
-            struct_hints=self.hints_struct, 
-            union_hints=self.hints_union
-        )
-        v.visit(ast)
-        self._cleanup()
-        return v.reflected
+        try:
+            ast = pc.parse_file(dot_h_path)
+            with open(dot_h_path) as f:
+                expanded_header = f.read()
+            available_option_types = set(re.findall(
+                r'\b(__OPTION_(?:DA_|FA_)?\w+_DECL__)\b',
+                expanded_header,
+            ))
+            option_members = {
+                option_type: (
+                    "data" if hint["kind"] == "option" else "arr"
+                )
+                for option_type, hint in self.option_hints.items()
+                if option_type in available_option_types
+            }
+            option_layouts = prober.get_option_layouts(dot_h_path, option_members)
+            v = parser.ReflVisitor(
+                dot_h_path,
+                enum_hints=self.hints_enum,
+                struct_hints=self.hints_struct,
+                union_hints=self.hints_union,
+                option_hints=self.option_hints,
+                option_layouts=option_layouts,
+            )
+            v.visit(ast)
+            return v.reflected
+        finally:
+            self._cleanup()
 
     def _extract_types(self, dot_h_path: str) -> str:
         with open(dot_h_path, 'r') as f:
             content = f.read()
 
-        # Find all REFLECT blocks using your brace-counting logic
-        # (Or the non-greedy regex if you prefer)
         blocks = []
-        # Simplified regex for finding the starts
-        starts = re.finditer(r'REFLECT\(.*?\)\s*{', content)
-        
+        starts = re.finditer(r'REFLECT\([^)]*\)\s*{', content)
+
         for start in starts:
-            st = start.end() # at the '{'
-            idx = st 
+            st = start.end()
+            idx = st
             brace_level = 1
 
             while idx < len(content):
                 char = content[idx]
-                if   char == '{' : brace_level += 1
-                elif char == '}' : brace_level -= 1
-                if brace_level == 0 and char == ';': break
+                if char == '{':
+                    brace_level += 1
+                elif char == '}':
+                    brace_level -= 1
+                    if brace_level == 0:
+                        semicolon = content.find(';', idx)
+                        if semicolon != -1:
+                            idx = semicolon
+                        break
                 idx += 1
-                
-            block = content[start.start():idx + 1]
-            blocks.append(block)
-            pass
 
-        clean_content = "\n".join(blocks)
+            block = content[start.start():idx + 1]
+            reflected_name = re.search(r'}\s*(?P<name>\w+)\s*;', block)
+            if not reflected_name or reflected_name.group("name") != parser.STRING_TYPE:
+                blocks.append((start.start(), block))
+
+        option_declaration_pattern = re.compile(
+            r'\bDECL_OPTION(?P<kind>_DYN_ARRAY|_FIXED_ARRAY)?\s*'
+            r'\((?P<args>[^;]*?)\)\s*;'
+        )
+        injected_options = self._extract_option_hints(
+            os.path.join(file_path, "inyect_headers/min_refl_types.h")
+        )
+        for match in option_declaration_pattern.finditer(content):
+            args = [arg.strip() for arg in match.group("args").split(",")]
+            alias, _ = self._option_hint(match.group("kind"), args, match.group())
+            if alias not in injected_options:
+                blocks.append((match.start(), match.group()))
+
+        clean_content = "\n".join(block for _, block in sorted(blocks))
         
         return clean_content
 
@@ -132,6 +171,48 @@ class CReflEngine:
 
         return ret
 
+    def _extract_option_hints(self, dot_h_path: str) -> dict[str, dict[str, str]]:
+        with open(dot_h_path) as f:
+            content = f.read()
+
+        hints = {}
+        declaration_pattern = re.compile(
+            r'\bDECL_OPTION(?P<kind>_DYN_ARRAY|_FIXED_ARRAY)?\s*'
+            r'\((?P<args>[^()]*)\)\s*;'
+        )
+        usage_pattern = re.compile(
+            r'\bOPTION(?P<kind>_DYN_ARRAY|_FIXED_ARRAY)?\s*'
+            r'\((?P<args>[^()]*)\)\s+(?P<name>\w+)\s*;'
+        )
+
+        for pattern in (declaration_pattern, usage_pattern):
+            for match in pattern.finditer(content):
+                args = [arg.strip() for arg in match.group("args").split(",")]
+                alias, hint = self._option_hint(
+                    match.group("kind"),
+                    args,
+                    match.group(),
+                )
+                hints[alias] = hint
+
+        return hints
+
+    @staticmethod
+    def _option_hint(
+        kind: str | None,
+        args: list[str],
+        declaration: str,
+    ) -> tuple[str, dict[str, str]]:
+        if kind is None and len(args) == 1:
+            return f"__OPTION_{args[0]}_DECL__", {"kind": "option", "type": args[0]}
+        if kind == "_DYN_ARRAY" and len(args) == 1:
+            return f"__OPTION_DA_{args[0]}_DECL__", {"kind": "dyn_array", "type": args[0]}
+        if kind == "_FIXED_ARRAY" and len(args) == 2:
+            return (
+                f"__OPTION_FA_{args[0]}_{args[1]}_DECL__",
+                {"kind": "fixed_array", "type": args[0], "size": args[1]},
+            )
+        raise ValueError(f"Invalid option declaration: {declaration}")
 
 
     def _extract_struct_union_hints(self, dot_h_path: str) -> tuple[ dict[dict[str, str], str], dict[dict[str, str], str] ]:

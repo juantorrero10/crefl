@@ -9,11 +9,11 @@ const char* refl_enum_get_label(REnum* type, int val) {
     // Straight correlation
     if (val < (int)type->n_elements && (int)type->indexes[val] == val) return type->names[val];
     // Binary search
-    int32_t low = 0;
-    int32_t high = type->n_elements - 1;
+    i32 low = 0;
+    i32 high = type->n_elements - 1;
 
     while (low <= high) {
-        int32_t mid = low + (high - low) / 2;
+        i32 mid = low + (high - low) / 2;
         int val_at = type->indexes[mid];
 
         if (val_at == val) {
@@ -73,7 +73,7 @@ RField* refl_field_by_name(RStruct* s, const char* name, int* opt_out_idx) {
 
 
 RObject refl_get_field_value(RStruct* st, RObject instance, int idx) {
-    return *(void**)((uint8_t*)instance + st->fields[idx]->offset);
+    return *(void**)((u8*)instance + st->fields[idx]->offset);
 }
 
 size_t refl_get_field_size(RField* f) {
@@ -90,7 +90,7 @@ size_t refl_get_field_size(RField* f) {
     case K_ENUM:
         return sizeof(int);
     case K_OPTION:
-        return sizeof(r_option_t);
+        return f->size;
     case K_DYN_ARRAY:
         return sizeof(r_array_t);
     case K_FIXED_ARRAY:

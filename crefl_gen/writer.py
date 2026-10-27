@@ -81,12 +81,12 @@ class CreflWriter:
     """
     typedef struct CREFL_PACKED
     {
-        uint64_t    magic;             // "CREFLX64"
-        uint8_t     endianness;        // 00 little endian, 01 big endian
-        uint16_t    version;           // 00 00
-        uint16_t    flags;             // Maybe useful in the future
-        uint8_t     checksum[16];
-        uint32_t    n_sections;        // 7
+        u64    magic;             // "CREFLX64"
+        u8     endianness;        // 00 little endian, 01 big endian
+        u16    version;           // 00 00
+        u16    flags;             // Maybe useful in the future
+        u8     checksum[16];
+        u32    n_sections;        // 7
     } CREFL_Header;
     """
     def _get_header(self) -> bytes:
@@ -105,18 +105,19 @@ class CreflWriter:
     typedef struct CREFL_PACKED
     {
         CREFL_String name;
-        uint32_t offset;            // Runtime offset, nothing to do with the .
-        uint32_t next_offset;
-        uint32_t array_size;
-        uint32_t kind;              // Same as RKind
+        u32 offset;            // Runtime offset, nothing to do with the .
+        u32 next_offset;
+        u32 array_size;        // For K_OPTION, byte size of the inline option wrapper
+        u32 kind;              // Same as RKind
 
 
         // Its meaning derives from the kind att
         // K_STRUCT, K_UNION, K_ENUM                        -> index of the type into the respective section.
         // K_OPTION, K_FIXED_ARRAY, K_DYN_ARRAY, K_POINTER  -> index of the subfield in the field section
+        // K_OPTION subtype field offset                    -> offset of the inline payload in the wrapper
         // K_PRIMITIVE                                      -> Type of primitive, same as KPimitive enum.
         // K_STRING                                         -> Unused
-        uint32_t subtype_data;
+        u32 subtype_data;
     } CREFL_Field;
 
     typedef struct CREFL_PACKED
@@ -124,8 +125,8 @@ class CreflWriter:
         CREFL_String type_name;
         // Storing n_elements's DWORD id's of the fields
         index_table_offset fields;
-        uint32_t n_elements;
-        uint32_t total_size;
+        u32 n_elements;
+        u32 total_size;
     } CREFL_Struct, CREFL_Union;
     """
     def _process_field(self, field) -> int:
@@ -241,7 +242,7 @@ class CreflWriter:
         // Referencing the values (indexes) of each enum entry.
         // Taking n_elements DWORD from the table
         index_table_offset indexes;
-        uint32_t n_elements;
+        u32 n_elements;
     } CREFL_Enum;
     """ 
     def _process_enum(self, en):
@@ -300,10 +301,10 @@ class CreflWriter:
     """
     typedef struct CREFL_PACKED 
     {
-        uint32_t kind;              // Means the same as the enum but it has to be 4 bytes
-        uint64_t start;             // From FILE SET
-        uint32_t n_elements;
-        uint32_t element_size;
+        u32 kind;              // Means the same as the enum but it has to be 4 bytes
+        u64 start;             // From FILE SET
+        u32 n_elements;
+        u32 element_size;
     } CREFL_Section_table;
     """
     def _get_section_tables(self) -> bytes:
@@ -363,14 +364,14 @@ class CreflWriter:
 
     """
     typedef struct CREFL_PACKED {
-        uint32_t n_elements;           
-        uint32_t next_hash_table_offset;  // From start of section
+        u32 n_elements;
+        u32 next_hash_table_offset;  // From start of section
     } CREFL_Hashtable_Header;
 
     typedef struct CREFL_PACKED
     {
-        uint32_t element_id;
-        uint32_t hashed_index;
+        u32 element_id;
+        u32 hashed_index;
     } CREFL_Hashtable_Entry;
     """
     def _get_hash_tables(self):

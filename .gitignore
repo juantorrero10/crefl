@@ -1,8 +1,10 @@
 build
 crefl_gen/__pycache__
+tests/__pycache__
 generator/__temp__crefl
 generated_types.crefl
 test.json
 src/demo
 _old_Makefile
 .vscode
+todo.txt

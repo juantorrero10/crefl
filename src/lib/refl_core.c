@@ -28,11 +28,11 @@ typedef struct {
 
 
 
-static inline uint32_t fnv1a(const char* name, size_t sz) {
-    uint32_t h = 0x811c9dc5;
+static inline u32 fnv1a(const char* name, size_t sz) {
+    u32 h = 0x811c9dc5;
     for (size_t i = 0; i < sz; i++)
     {
-        uint8_t b = name[i];
+        u8 b = name[i];
         h ^= b;
         h = (h * 0x01000193) & 0xffffffff;
     }
@@ -54,8 +54,8 @@ void refl_threadlocal_destroy() { arena_tls_free(); }
 
 REnum* refl_fetch_enum_from(RHandle scope, const char* name) {
     mdata_table_set* t = (mdata_table_set*)scope;
-    uint32_t att_count = 0;
-    uint32_t idx = fnv1a(name, strlen(name)) % t->enums.count;
+    u32 att_count = 0;
+    u32 idx = fnv1a(name, strlen(name)) % t->enums.count;
     while(((t->enums.map[idx].k_name == NULL) 
     || (strcmp(name, t->enums.map[idx].k_name) != 0)) && att_count <= t->enums.count ) {
         att_count++;
@@ -73,8 +73,8 @@ REnum* refl_fetch_enum(const char* name) {
 
 RStruct* refl_fetch_struct_from(RHandle scope, const char* name) {
     mdata_table_set* t = (mdata_table_set*)scope;
-    uint32_t att_count = 0;
-    uint32_t idx = fnv1a(name, strlen(name)) % t->structs.count;
+    u32 att_count = 0;
+    u32 idx = fnv1a(name, strlen(name)) % t->structs.count;
     while(((t->structs.map[idx].k_name == NULL) 
     || (strcmp(name, t->structs.map[idx].k_name) != 0)) && att_count <= t->structs.count ) {
         att_count++;
@@ -91,8 +91,8 @@ RStruct* refl_fetch_struct(const char* name) {
 
 RUnion* refl_fetch_union_from(RHandle scope, const char* name) {
     mdata_table_set* t = (mdata_table_set*)scope;
-    uint32_t att_count = 0;
-    uint32_t idx = fnv1a(name, strlen(name)) % t->unions.count;
+    u32 att_count = 0;
+    u32 idx = fnv1a(name, strlen(name)) % t->unions.count;
     while(((t->unions.map[idx].k_name == NULL) 
     || (strcmp(name, t->unions.map[idx].k_name) != 0)) && att_count <= t->unions.count ) {
         att_count++;
@@ -125,7 +125,7 @@ void refl_set_field(RStruct* s, const char* field_name, RObject instance, void* 
     if (!s || !field_name || !buff || !instance ) return;
     RField* f = refl_field_by_name(s, field_name, NULL);
     if (!f) return;
-    memcpy((uint8_t*)instance + f->offset, buff, refl_get_field_size(f));
+    memcpy((u8*)instance + f->offset, buff, refl_get_field_size(f));
 }
 
 RObject refl_get_field(RStruct* s, const char* field_name, RObject instance) {
@@ -261,27 +261,28 @@ void refl_destroy_struct(RStruct* owned) {
 }
 
 static void __struct_generic_destructor(RStruct* t, RObject instance, int free_father);
+static void __field_generic_destructor(RField* f, void* src);
 
 static void __array_generic_destructor(RField* arr, void* src) {
     int dyn = arr->kind == K_DYN_ARRAY;
-    r_array_t* a = (r_array_t*)src;
-    if (arr->subtype.subfield->kind == K_STRING) {
-        size_t nelem = (dyn)? a->size : arr->size;
-        uint8_t* _arr = (dyn)? a->array : (uint8_t*)src;
-        for (size_t i = 0; i < nelem; i++)
-            free(((char**)_arr)[i]);
+    size_t count = arr->size;
+    u8* elements = src;
+
+    if (dyn) {
+        r_array_t* a = (r_array_t*)src;
+        count = a->size;
+        elements = a->array;
     }
-    else if (arr->subtype.subfield->kind == K_STRUCT && dyn) {
-        for (size_t i = 0; i < a->size; i++)
-        {
-            __struct_generic_destructor(
-                arr->subtype.subfield->subtype.s, 
-                a->array + (arr->subtype.subfield->subtype.s->total_size * i),
-                0
-            );
-        }
+
+    size_t stride = refl_get_field_size(arr->subtype.subfield);
+    for (size_t i = 0; i < count; i++) {
+        __field_generic_destructor(
+            arr->subtype.subfield,
+            elements + (stride * i)
+        );
     }
-    if (dyn) free(a->array);
+
+    if (dyn) free(((r_array_t*)src)->array);
 }
 
 static void __field_generic_destructor(RField* f, void* src) {
@@ -293,14 +294,11 @@ static void __field_generic_destructor(RField* f, void* src) {
         break;
 
     case K_OPTION:
-        r_option_t* o = (r_option_t*)src;
-        if (f->subtype.subfield->kind == K_STRING) {
-            free(o->optional);
-            return;
-        }
-        if (f->kind != K_PRIMITIVE) {
-            __field_generic_destructor(f->subtype.subfield, o->optional);
-            free(o->optional);
+        if (refl_option_is_some(src)) {
+            __field_generic_destructor(
+                f->subtype.subfield,
+                refl_option_data(f, src)
+            );
         }
         break;
 
@@ -345,8 +343,8 @@ RObject refl_object_deepcopy(RStruct* t, const RObject instance) {
     for (size_t i = 0; i < t->n_elements; i++)
     {
         RField* f = t->fields[i];
-        uint8_t* src = ((uint8_t*)instance + f->offset);
-        uint8_t* dst = ((uint8_t*)out + f->offset);
+        u8* src = ((u8*)instance + f->offset);
+        u8* dst = ((u8*)out + f->offset);
         switch (f->kind)
         {
         case K_STRING:

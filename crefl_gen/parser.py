@@ -5,14 +5,15 @@ from enum import Enum
 
 PRIMITIVE_MAP = {
     # Integers
-    'int8_t': 'P_I8',
-    'uint8_t': 'P_U8',
-    'int16_t': 'P_I16',
-    'uint16_t': 'P_U16',
-    'int32_t': 'P_I32',
-    'uint32_t': 'P_U32',
-    'int64_t': 'P_I64',
-    'uint64_t': 'P_U64',
+    'char': 'P_I8',
+    'i8': 'P_I8',
+    'u8': 'P_U8',
+    'i16': 'P_I16',
+    'u16': 'P_U16',
+    'i32': 'P_I32',
+    'u32': 'P_U32',
+    'i64': 'P_I64',
+    'u64': 'P_U64',
     'size_t': 'P_U64',
     'ssize_t': 'P_I64',
     'float': 'P_F32',
@@ -20,6 +21,8 @@ PRIMITIVE_MAP = {
     'bool': 'P_BOOL', '_Bool': 'P_BOOL',
     'void': 'P_U0'
 }
+
+STRING_TYPE = 'strZ'
 
 KIND_VALUES = {
     'K_PRIMITIVE':0,
@@ -40,12 +43,10 @@ PRIMITIVE_VALUES = {
 }
 
 REFL_CUSTOM = {
-    'r_option_t': 'K_OPTION',
     'r_array_t': 'K_DYN_ARRAY'
 }
 
 REFL_CUSTOM_INNER_NAME = {
-    'K_OPTION': 'optional',
     'K_DYN_ARRAY': 'array'
 }
 
@@ -86,10 +87,20 @@ def pretty(d, indent=0):
 
 
 class ReflVisitor(c_ast.NodeVisitor):
-    def __init__(self, dot_h_path: str, enum_hints={}, struct_hints={}, union_hints={}):
-        self.henums = enum_hints
-        self.hstructs = struct_hints
-        self.hunions = union_hints
+    def __init__(
+        self,
+        dot_h_path: str,
+        enum_hints=None,
+        struct_hints=None,
+        union_hints=None,
+        option_hints=None,
+        option_layouts=None,
+    ):
+        self.henums = enum_hints or []
+        self.hstructs = struct_hints or {}
+        self.hunions = union_hints or {}
+        self.option_hints = option_hints or {}
+        self.option_layouts = option_layouts or {}
         self.doth = dot_h_path
         # Result of the operation
         self.reflected = {
@@ -109,7 +120,9 @@ class ReflVisitor(c_ast.NodeVisitor):
         typename = node.declname  # <-- use declname, not name
         
 
-        if typename in self.henums or typename in self.hstructs or typename in self.hunions:
+        if typename != STRING_TYPE and (
+            typename in self.henums or typename in self.hstructs or typename in self.hunions
+        ):
             target = node.type  # type can be Struct, Union, Enum, IdentifierType
 
             if isinstance(target, c_ast.Struct):
@@ -187,26 +200,27 @@ class ReflVisitor(c_ast.NodeVisitor):
 
         base_type = self._get_base_type(decl_type)
 
-        # Raw pointers and strings
+        if base_type == STRING_TYPE:
+            field["kind"] = "K_STRING"
+            return field
+
+        # Raw pointers
         if isinstance(decl_type, c_ast.PtrDecl):
             subtype = {}
-            if (base_type == 'char') and not isinstance(decl_type.type, c_ast.PtrDecl):
-                field["kind"] = "K_STRING"
-            else:
-                field["kind"] = "K_POINTER"
+            field["kind"] = "K_POINTER"
 
-                pointee_field = self._process_field(
-                    name=f"{name}_pointee",
-                    offset=0, 
-                    off_next=0,
-                    decl_type=decl_type.type,
-                    parent_struct=parent_struct, 
-                    is_struct=is_struct
-                )
-                subtype = {
-                    "kind": SubtypeKind.SUBFIELD,
-                    "data": pointee_field
-                }
+            pointee_field = self._process_field(
+                name=f"{name}_pointee",
+                offset=0,
+                off_next=0,
+                decl_type=decl_type.type,
+                parent_struct=parent_struct,
+                is_struct=is_struct,
+            )
+            subtype = {
+                "kind": SubtypeKind.SUBFIELD,
+                "data": pointee_field
+            }
 
             field["subtype"] = subtype
             return field
@@ -221,6 +235,65 @@ class ReflVisitor(c_ast.NodeVisitor):
                 }
                 return field
     
+        if base_type in self.option_hints:
+            hint = self.option_hints[base_type]
+            try:
+                data_offset, option_size = self.option_layouts[base_type]
+            except KeyError as exc:
+                raise ValueError(
+                    f"Missing C layout information for option type {base_type}"
+                ) from exc
+
+            field["size"] = option_size
+            inner = self._process_field(
+                "data",
+                0,
+                0,
+                self._str_type_to_decl(hint["type"]),
+                parent_struct,
+                is_struct,
+            )
+
+            if hint["kind"] == "dyn_array":
+                inner = {
+                    "name": "array",
+                    "offset": data_offset,
+                    "next_offset": 0,
+                    "size": 1,
+                    "kind": "K_DYN_ARRAY",
+                    "subtype": {
+                        "kind": SubtypeKind.SUBFIELD,
+                        "data": inner,
+                    },
+                }
+            elif hint["kind"] == "fixed_array":
+                try:
+                    array_size = int(hint["size"], 0)
+                except ValueError as exc:
+                    raise ValueError(
+                        f"Option fixed-array size must be an integer literal: {hint['size']}"
+                    ) from exc
+                inner = {
+                    "name": "array",
+                    "offset": data_offset,
+                    "next_offset": 0,
+                    "size": array_size,
+                    "kind": "K_FIXED_ARRAY",
+                    "subtype": {
+                        "kind": SubtypeKind.SUBFIELD,
+                        "data": inner,
+                    },
+                }
+            else:
+                inner["offset"] = data_offset
+
+            field["kind"] = "K_OPTION"
+            field["subtype"] = {
+                "kind": SubtypeKind.SUBFIELD,
+                "data": inner,
+            }
+            return field
+
         
         #Option<T> / DynArray<T>
         if base_type in REFL_CUSTOM:
@@ -455,6 +528,3 @@ class ReflVisitor(c_ast.NodeVisitor):
 
 
         
-
-
-

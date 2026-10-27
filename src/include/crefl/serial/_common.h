@@ -44,7 +44,7 @@ typedef struct {
 
     void (*format_primitive)(
         RPrimitive p,
-        uint64_t raw,
+        u64 raw,
         void* buff,
         size_t sz
     );
@@ -67,21 +67,21 @@ typedef struct {
 } g_arraylist_t;
 
 typedef struct {
-    uint8_t* data;
+    u8* data;
     size_t cur;
     int n_arena;
     size_t capacity;
 } unordered_buffer;
 
 typedef struct {
-    uint8_t* buff;
+    u8* buff;
     size_t cur;
     size_t eof;
 } stream_walker;
 
 int generic_str_to_numeric(
     stream_walker* sw,
-    uint64_t* out_bytes,
+    u64* out_bytes,
     RPrimitive* out_prim_kind
 );
 
@@ -101,8 +101,8 @@ typedef union {
     void* ptr;
     char* str;
     char c;
-    uint64_t u;
-    int64_t s;
+    u64 u;
+    i64 s;
     double f;
 } any_t;
 
@@ -110,7 +110,7 @@ typedef union {
 #define RET_OK(_ptr) (DeserializeResult){.st = DR_OK, .data.buff = _ptr}
 
 
-void generic_numeric_to_str(RPrimitive p, uint64_t bytes, void* buff, size_t sz);
+void generic_numeric_to_str(RPrimitive p, u64 bytes, void* buff, size_t sz);
 size_t walk_type(SerializePolicy* sp, RStruct* s, RObject instance, void** out);
 
 

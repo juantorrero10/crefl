@@ -181,7 +181,7 @@ int refl_enum_migrate_by_label(REnum* old, REnum* new, int val) {
 }
 
 int refl_primitive_can_promote(RPrimitive from, RPrimitive to) {
-    static const uint8_t sizes[] = {
+    static const u8 sizes[] = {
         [P_U0]=0,
         [P_U8]=1,[P_I8]=1,
         [P_U16]=2,[P_I16]=2,
@@ -220,7 +220,7 @@ void refl_primitive_convert(
     void* dst
 ) {
     double f = 0.0;
-    int64_t i = 0;
+    i64 i = 0;
     int is_float = 0;
 
     /* ---- LOAD ---- */
@@ -228,14 +228,14 @@ void refl_primitive_convert(
         case P_F32: f = *(const float*)src; is_float = 1; break;
         case P_F64: f = *(const double*)src; is_float = 1; break;
 
-        case P_I8:  i = *(const int8_t*)src; break;
-        case P_U8:  i = *(const uint8_t*)src; break;
-        case P_I16: i = *(const int16_t*)src; break;
-        case P_U16: i = *(const uint16_t*)src; break;
-        case P_I32: i = *(const int32_t*)src; break;
-        case P_U32: i = *(const uint32_t*)src; break;
-        case P_I64: i = *(const int64_t*)src; break;
-        case P_U64: i = *(const uint64_t*)src; break;
+        case P_I8:  i = *(const i8*)src; break;
+        case P_U8:  i = *(const u8*)src; break;
+        case P_I16: i = *(const i16*)src; break;
+        case P_U16: i = *(const u16*)src; break;
+        case P_I32: i = *(const i32*)src; break;
+        case P_U32: i = *(const u32*)src; break;
+        case P_I64: i = *(const i64*)src; break;
+        case P_U64: i = *(const u64*)src; break;
         case P_BOOL:i = *(const _Bool*)src; break;
         default: return;
     }
@@ -249,14 +249,14 @@ void refl_primitive_convert(
             *(double*)dst = is_float ? f : (double)i;
             break;
 
-        case P_I8:  *(int8_t*)dst  = (int8_t)(is_float ? f : i); break;
-        case P_U8:  *(uint8_t*)dst = (uint8_t)(is_float ? f : i); break;
-        case P_I16: *(int16_t*)dst = (int16_t)(is_float ? f : i); break;
-        case P_U16: *(uint16_t*)dst= (uint16_t)(is_float ? f : i); break;
-        case P_I32: *(int32_t*)dst = (int32_t)(is_float ? f : i); break;
-        case P_U32: *(uint32_t*)dst= (uint32_t)(is_float ? f : i); break;
-        case P_I64: *(int64_t*)dst = (int64_t)(is_float ? f : i); break;
-        case P_U64: *(uint64_t*)dst= (uint64_t)(is_float ? f : i); break;
+        case P_I8:  *(i8*)dst  = (i8)(is_float ? f : i); break;
+        case P_U8:  *(u8*)dst = (u8)(is_float ? f : i); break;
+        case P_I16: *(i16*)dst = (i16)(is_float ? f : i); break;
+        case P_U16: *(u16*)dst= (u16)(is_float ? f : i); break;
+        case P_I32: *(i32*)dst = (i32)(is_float ? f : i); break;
+        case P_U32: *(u32*)dst= (u32)(is_float ? f : i); break;
+        case P_I64: *(i64*)dst = (i64)(is_float ? f : i); break;
+        case P_U64: *(u64*)dst= (u64)(is_float ? f : i); break;
 
         case P_BOOL:
             *(int*)dst = (is_float ? f != 0.0 : i != 0);
@@ -292,8 +292,8 @@ static void migrate_array(
     /* dst is already zeroed by caller */
 
     for (size_t i = 0; i < count; i++) {
-        void* src_elem = (uint8_t*)src + i * old_stride;
-        void* dst_elem = (uint8_t*)dst + i * new_stride;
+        void* src_elem = (u8*)src + i * old_stride;
+        void* dst_elem = (u8*)dst + i * new_stride;
 
         /* Same kind -> recurse */
         if (e_old->kind == e_new->kind) {
@@ -354,13 +354,11 @@ static void migrate_array(
 void refl_migrate_field(
     RField* f_old,
     RField* f_new,
-    uint8_t* src,
-    uint8_t* dst,
+    u8* src,
+    u8* dst,
     int wrapped_src,
     int wrapped_dst
 ) {
-    int val = *(int*)src;
-
     if (f_old->kind != f_new->kind) goto diferent;
 
     switch (f_old->kind)
@@ -379,13 +377,15 @@ void refl_migrate_field(
         *(char**)dst = strdup(*(char**)src);
         return;
 
-    case K_ENUM:
+    case K_ENUM: {
+        int val = *(int*)src;
         *(int*)dst = refl_enum_migrate_by_label(
             f_old->subtype.e,
             f_new->subtype.e,
             val
         );
         return;
+    }
 
     case K_STRUCT: {
         void* _src = src;
@@ -427,21 +427,20 @@ void refl_migrate_field(
         memcpy(dst, src, sizeof(void*));
         return;
 
-    case K_OPTION:  
-        r_option_t* o = (r_option_t*)src;
-        r_option_t* n = (r_option_t*)dst;
-
-        n->opt = o->opt;
-        if (o->opt == SOME) {
+    case K_OPTION: {
+        bool is_some = refl_option_is_some(src);
+        *(bool*)dst = is_some;
+        if (is_some) {
             refl_migrate_field(
                 f_old->subtype.subfield,
                 f_new->subtype.subfield,
-                (uint8_t*)&o->optional,
-                (uint8_t*)&n->optional,
-                1,1
+                refl_option_data(f_old, src),
+                refl_option_data(f_new, dst),
+                0, 0
             );
         }
         return;
+    }
 
     default:
         return;
@@ -450,33 +449,27 @@ void refl_migrate_field(
 diferent:
 
     if (f_old->kind == K_OPTION && f_new->kind != K_OPTION) {
-        r_option_t* o = (r_option_t*)src;
-        if (o->opt == SOME) {
+        if (refl_option_is_some(src)) {
             refl_migrate_field(
                 f_old->subtype.subfield,
                 f_new,
-                (uint8_t*)&o->optional,
+                refl_option_data(f_old, src),
                 dst,
-                1, 0
+                0, 0
             );
         }
     }
 
     else if (f_old->kind != K_OPTION && f_new->kind == K_OPTION) {
-        r_option_t* o = (r_option_t*)dst;
-        o->opt = SOME;
-        o->size = f_old->next_offset - f_old->offset;
+        *(bool*)dst = true;
 
         refl_migrate_field(
             f_old,
             f_new->subtype.subfield,
             src,
-            (void*)&o->optional,
-            0, 1
+            refl_option_data(f_new, dst),
+            0, 0
         );
-
-        o->size = f_new->subtype.subfield->next_offset -
-                  f_new->subtype.subfield->offset;
     }
 
     else if (f_old->kind == K_FIXED_ARRAY && f_new->kind == K_DYN_ARRAY) {
@@ -504,7 +497,7 @@ diferent:
     else if (f_old->kind == K_STRING && f_new->kind == K_ENUM) {
         REnum* e = f_new->subtype.e;
         const char* old_str = *(const char**)src;
-        int64_t val;
+        i64 val;
         bool found = false;
         for (size_t i = 0; i < e->n_elements; i++)
         {
@@ -513,10 +506,10 @@ diferent:
             val = e->indexes[i];
         }
         if (!found) return;
-        if (f_new->size == sizeof(int32_t)) {
-            *(int32_t*)dst = (int32_t)val;
+        if (f_new->size == sizeof(i32)) {
+            *(i32*)dst = (i32)val;
         } else {
-            *(int64_t*)dst = val;
+            *(i64*)dst = val;
         }
     }
 }
@@ -529,7 +522,7 @@ diferent:
 RObject refl_migrate_struct(RStruct* old, RStruct* new, RObject instance) {
     if (!old || !new || !instance) return NULL;
 
-    uint8_t* out = calloc(1, new->total_size);
+    u8* out = calloc(1, new->total_size);
     memset(out, 0, new->total_size);
     if (!out) return NULL;
 
@@ -538,8 +531,8 @@ RObject refl_migrate_struct(RStruct* old, RStruct* new, RObject instance) {
         RField* f_new = refl_field_by_name(new, f_old->name, NULL);
         if (!f_new) continue;
 
-        uint8_t* src = (uint8_t*)instance + f_old->offset;
-        uint8_t* dst = out + f_new->offset;
+        u8* src = (u8*)instance + f_old->offset;
+        u8* dst = out + f_new->offset;
 
         refl_migrate_field(f_old, f_new, src, dst, 0, 0);
     }

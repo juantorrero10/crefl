@@ -22,7 +22,7 @@ CREFL_Field* field_section = NULL;
 CREFL_Enum* enum_section = NULL;
 CREFL_Struct* struct_section = NULL;
 CREFL_Union* union_section = NULL;
-uint32_t* index_table = NULL;
+u32* index_table = NULL;
 
 typedef struct {
     refl_st_hashmap_t structs;
@@ -53,7 +53,7 @@ static void print_header(void* mem, size_t sz) {
     printf("ENDIANNESS: %hhu\n", header->endianness);
     printf("VERSION: %hu\n", header->version);
     printf("FLAGS: %hu\n", header->flags);
-    printf("CHECK_SUM: 0x%lx%lx\n", *(uint64_t*)header->checksum + 8, *(uint64_t*)header->checksum);
+    printf("CHECK_SUM: 0x%lx%lx\n", *(u64*)header->checksum + 8, *(u64*)header->checksum);
     printf("N_SECTIONS: %u\n", header->n_sections);
 
     NUM_SECTIONS = header->n_sections;
@@ -63,12 +63,12 @@ static inline void set_string(char* string_pool, CREFL_String* desc, char** dst)
     *dst = string_pool + desc->offset;
 }
 
-static char* get_st_un_name_from_file_id(char* string_pool, uint32_t id, CREFL_Section_kind where) {
+static char* get_st_un_name_from_file_id(char* string_pool, u32 id, CREFL_Section_kind where) {
     DEREF_NEW(CREFL_Struct, section, base_ptr, sections_tables[where].start);
     return string_pool + section[id].type_name.offset;
 }
 
-static char* get_en_name_from_file_id(char* string_pool, uint32_t id) {
+static char* get_en_name_from_file_id(char* string_pool, u32 id) {
     DEREF_NEW(CREFL_Enum, section, base_ptr, sections_tables[CREFL_SECTION_ENUMS].start);
     return string_pool + section[id].type_name.offset;
 }
@@ -147,8 +147,8 @@ static void populate_enums(refl_en_hashmap_t* enum_hm, char* string_pool) {
     CREFL_Hashtable_Entry* enum_hashtable = (CREFL_Hashtable_Entry*)(enum_ht_header + 1);
     for (size_t i = 0; i < n_hash_entries; i++)
     {
-        uint32_t file_idx = enum_hashtable[i].element_id;
-        uint32_t new_idx  = enum_hashtable[i].hashed_index;
+        u32 file_idx = enum_hashtable[i].element_id;
+        u32 new_idx  = enum_hashtable[i].hashed_index;
         CREFL_Enum* ady = enum_section + file_idx;
         refl_en_entry_t* entry = &enum_hm->map[new_idx];
         
@@ -176,7 +176,7 @@ static void populate_enums(refl_en_hashmap_t* enum_hm, char* string_pool) {
         }
 
         curr->indexes = calloc(sizeof(size_t), ady->n_elements);
-        uint32_t* file_indexes = (uint32_t*)(index_table + ady->indexes);
+        u32* file_indexes = (u32*)(index_table + ady->indexes);
         for (size_t i = 0; i < ady->n_elements; i++) {
             curr->indexes[i] = (size_t)file_indexes[i];
         }
@@ -187,7 +187,7 @@ static void populate_structs(refl_st_hashmap_t* struct_hm, refl_fi_array_t* fiel
     DEREF_NEW(CREFL_Hashtable_Header, ht_header, base_ptr, sections_tables[CREFL_SECTION_HASHTABLES].start);
     
     // find the struct table, 2 second one
-    uint8_t* ptr = (uint8_t*)ht_header + ht_header->next_hash_table_offset;
+    u8* ptr = (u8*)ht_header + ht_header->next_hash_table_offset;
     ht_header = (CREFL_Hashtable_Header*)ptr;
 
     size_t n_hash_entries = ht_header->n_elements;
@@ -219,15 +219,15 @@ static void populate_structs(refl_st_hashmap_t* struct_hm, refl_fi_array_t* fiel
         curr->fields = calloc(sizeof(void*), curr->n_elements);
         for (size_t i = 0; i < curr->n_elements; i++)
         {
-            curr->fields[i] = field_arr->fields + (uint32_t)(index_table + ady->fields)[i];
+            curr->fields[i] = field_arr->fields + (u32)(index_table + ady->fields)[i];
         }    
     }
 }
 
 static void populate_unions(refl_un_hashmap_t* union_hm, refl_fi_array_t* field_arr, char* string_pool) {
     // find the union table, third one
-    uint8_t* ht_base =
-    (uint8_t*)base_ptr + sections_tables[CREFL_SECTION_HASHTABLES].start;
+    u8* ht_base =
+    (u8*)base_ptr + sections_tables[CREFL_SECTION_HASHTABLES].start;
 
     /* 1st table */
     CREFL_Hashtable_Header* ht1 =
@@ -272,7 +272,7 @@ static void populate_unions(refl_un_hashmap_t* union_hm, refl_fi_array_t* field_
         curr->fields = calloc(sizeof(void*), curr->n_elements);
         for (size_t i = 0; i < curr->n_elements; i++)
         {
-            curr->fields[i] = field_arr->fields + (uint32_t)(index_table + ady->fields)[i];
+            curr->fields[i] = field_arr->fields + (u32)(index_table + ady->fields)[i];
         }    
     }
 }
@@ -312,12 +312,12 @@ void _parse_crefl(
     DEREF(CREFL_Enum,           enum_section, mapped, sections_tables[CREFL_SECTION_ENUMS].start);
     DEREF(CREFL_Struct,         struct_section, mapped, sections_tables[CREFL_SECTION_STRUCTS].start);
     DEREF(CREFL_Union,          union_section, mapped, sections_tables[CREFL_SECTION_UNIONS].start);
-    DEREF(uint32_t,             index_table, mapped, sections_tables[CREFL_SECTION_INDEX_TABLE].start);
+    DEREF(u32,             index_table, mapped, sections_tables[CREFL_SECTION_INDEX_TABLE].start);
 
     size_t sp_size = sections_tables[CREFL_SECTION_STRING_POOL].n_elements;
     table->string_pool = malloc(sp_size);
 
-    memcpy(table->string_pool, (uint8_t*)mapped + (sections_tables[CREFL_SECTION_STRING_POOL].start), sp_size);
+    memcpy(table->string_pool, (u8*)mapped + (sections_tables[CREFL_SECTION_STRING_POOL].start), sp_size);
     // Fields need to be allocated before anything alse
     table->fields.fields = malloc(sizeof(RField) * sections_tables[CREFL_SECTION_FIELDS].n_elements);
 

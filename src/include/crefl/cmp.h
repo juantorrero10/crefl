@@ -13,8 +13,8 @@ int refl_enum_migrate_by_label(REnum* old, REnum* new, int val);
 void refl_migrate_field(
     RField* f_old,
     RField* f_new,
-    uint8_t* src,
-    uint8_t* dst,
+    u8* src,
+    u8* dst,
     int wrapped_src,
     int wrapped_dst
 );

@@ -1,12 +1,51 @@
 #ifndef REFL_TYPES_H_
 #define REFL_TYPES_H_
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
+
+#ifndef __linux__
+#error "Only linux supported for the moment"
+#endif
+
+typedef signed char i8;
+typedef short i16;
+typedef int i32;
+typedef long i64;
+typedef unsigned char u8;
+typedef unsigned short u16;
+typedef unsigned int u32;
+typedef unsigned long u64;
 
 #define REFLECT(type) typedef type
-#define OPTION(type) r_option_t
+//#define OPTION(type) r_option_t
 #define DYN_ARRAY(type) r_array_t 
+
+#define DECL_OPTION(type) typedef struct { bool is_some; type data; } __OPTION_##type##_DECL__
+#define DECL_OPTION_DYN_ARRAY(type) typedef struct { bool is_some; r_array_t arr; } __OPTION_DA_##type##_DECL__
+#define DECL_OPTION_FIXED_ARRAY(type, N) typedef struct { bool is_some; type arr[N]; } __OPTION_FA_##type##_##N##_DECL__
+#define OPTION(type) __OPTION_##type##_DECL__
+#define OPTION_DYN_ARRAY(type) __OPTION_DA_##type##_DECL__
+#define OPTION_FIXED_ARRAY(type, N) __OPTION_FA_##type##_##N##_DECL__
+
+
+REFLECT(struct) {
+    char* data;
+} strZ;
+
+DECL_OPTION(strZ);
+DECL_OPTION(bool);
+DECL_OPTION(u8);
+DECL_OPTION(i8);
+DECL_OPTION(u16);
+DECL_OPTION(i16);
+DECL_OPTION(u32);
+DECL_OPTION(i32);
+DECL_OPTION(u64);
+DECL_OPTION(i64);
+DECL_OPTION(float);
+DECL_OPTION(double);
+
 
 REFLECT(enum) {
     K_PRIMITIVE,
@@ -42,7 +81,7 @@ typedef struct {
 typedef struct { 
     const char* name_type;
     const char** names;
-    int64_t* indexes;
+    i64* indexes;
     size_t n_elements;
 } REnum;
 
@@ -50,7 +89,7 @@ typedef struct _CREFL_FIELD_{
     const char* name;
     size_t offset;
     size_t next_offset;
-    size_t size;          // For dyn arrays, always 1 for other kinds 
+    size_t size;          // Array count, except K_OPTION stores the wrapper byte size
     RKind kind;
     union {
         RPrimitive prim;
@@ -61,6 +100,14 @@ typedef struct _CREFL_FIELD_{
     } subtype;
 } RField;
 
+static inline bool refl_option_is_some(const void* option_value) {
+    return *(const bool*)option_value;
+}
+
+static inline void* refl_option_data(const RField* option_field, void* option_value) {
+    return (u8*)option_value + option_field->subtype.subfield->offset;
+}
+
 typedef void* RObject;
 
 typedef struct {
@@ -68,8 +115,7 @@ typedef struct {
     void* instance;
 } _RObject;
 
-// Data wrappers for defining uses cases for a pointer
-// These will be generated into K_OPTION and K_DYN_ARRAY
+// Legacy heap-backed optional representation; OPTION(type) uses inline wrappers.
 typedef struct _CREFL_OPTION_ {
     enum opt_states { NONE, SOME } opt;
     void* optional;

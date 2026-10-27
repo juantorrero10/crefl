@@ -80,7 +80,10 @@ $(DEMO_BIN): $(CRELF_FILE) $(DEMO_OBJ) $(SHARED_LIB) | $(BIN_DIR)
 # =========================================================
 # Run demo
 # =========================================================
-run_demo: $(DEMO_BIN)
+build_demo: $(DEMO_BIN)
+
+
+run_demo: build_demo
 	@echo "Running demo..."
 	@$(DEMO_BIN)
 
@@ -99,4 +102,4 @@ clean:
 
 -include $(DEPS)
 
-.PHONY: all static clean run_demo
+.PHONY: all static clean run_demo build_demo

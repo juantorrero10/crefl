@@ -4,18 +4,19 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
-
 #include <stdio.h>
 
+#include <crefl/types.h>
+
 typedef struct {
-    uint8_t* arena;
+    u8* arena;
     size_t brk;
     size_t capacity;
     size_t robbing;
 } scratch_arena_partition;
 
 typedef struct {
-    uint8_t* arena;
+    u8* arena;
     size_t brk;
     size_t capacity;
     size_t num_partitions;
@@ -45,7 +46,7 @@ void arena_init(size_t initial_cap, int manual_dealloc) {
         MAX(initial_cap, MIN_SIZE),
         PROT_READ | PROT_WRITE, 
         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    g_scratch_arena.arena = (uint8_t*)(g_scratch_arena.partitions + MAX_PARTITIONS);
+    g_scratch_arena.arena = (u8*)(g_scratch_arena.partitions + MAX_PARTITIONS);
     // Trivial partition
     g_scratch_arena.capacity = initial_cap;
     g_scratch_arena.brk = 0;
@@ -107,7 +108,7 @@ int arena_create_partition(size_t size) {
     assert(n < MAX_PARTITIONS);
 
     size &= ~0xF;
-    uint8_t* as = (uint8_t*)((((size_t)g_scratch_arena.arena + g_scratch_arena.brk) & ~0xF) + 0x10);
+    u8* as = (u8*)((((size_t)g_scratch_arena.arena + g_scratch_arena.brk) & ~0xF) + 0x10);
     size_t cap = MIN((g_scratch_arena.capacity - g_scratch_arena.brk) & ~0xF, MAX(16, size));
     
     g_scratch_arena.partitions[n] = (scratch_arena_partition){
@@ -154,7 +155,7 @@ int arena_rob_partition(int n_partition, size_t sz) {
     scratch_arena_partition* og = &GA.partitions[n_partition];
     sz = MIN(og->capacity - 16, MAX(16, sz));
     og->capacity -= sz;
-    uint8_t* as = og->arena - sz;
+    u8* as = og->arena - sz;
     GA.partitions[n] = (scratch_arena_partition){
         .arena = as,
         .brk = 0,
@@ -224,7 +225,7 @@ void visualize_arena() {
 
         for (size_t col = 0; col < row_size; ++col) {
             size_t off = row_off + col;
-            uint8_t byte = g_scratch_arena.arena[off];
+            u8 byte = g_scratch_arena.arena[off];
 
             const char* color = COLOR_GREY;
             int bold = 0;
