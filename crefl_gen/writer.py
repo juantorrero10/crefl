@@ -5,13 +5,12 @@ import parser
 
 VERSION = int(0)
 MAGIC = b'CREFLX64'
-ENDIANNESS = int(0)
 FLAGS = int(0)
-CHECKSUM_OFFSET = 13
+# CHECKSUM_OFFSET = 13
 N_SECTIONS = int(7)
 N_HASH_TABLES = int(3)
 
-SIZE_HEADER = 33
+SIZE_HEADER = 32
 SIZE_SECTION_TABLE = 20
 SIZE_FIELD = 28
 SIZE_STRUCT = 20
@@ -82,21 +81,21 @@ class CreflWriter:
     typedef struct CREFL_PACKED
     {
         u64    magic;             // "CREFLX64"
-        u8     endianness;        // 00 little endian, 01 big endian
         u16    version;           // 00 00
-        u16    flags;             // Maybe useful in the future
+        u8     flags1;            
+        u8     flags2;
         u8     checksum[16];
         u32    n_sections;        // 7
     } CREFL_Header;
     """
     def _get_header(self) -> bytes:
-        self.cur += (8 + 1 + 2 + 2 + 16 + 4)
+        self.cur += (8 + 2 + 2 + 16 + 4)
         return struct.pack(
-            "<8s B H H 16s I",
+            "<8s B B H 16s I",
             MAGIC,
-            ENDIANNESS,
             VERSION,
-            FLAGS,
+            FLAGS & 0xFF,
+            (FLAGS >> 8) & 0xFF,
             self.checksum,
             N_SECTIONS,
         )

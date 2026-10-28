@@ -37,7 +37,7 @@ size_t NUM_SECTIONS;
 
 static void print_header(void* mem, size_t sz) {
     DEREF_NEW(CREFL_Header, header, mem, 0);
-    if (header->endianness) {
+    if (header->flags1 & 1) {
         fprintf(stderr, "This refl version doesn't support big-endian.\n");
         munmap(mem, sz);
         exit(EXIT_FAILURE);
@@ -50,9 +50,9 @@ static void print_header(void* mem, size_t sz) {
 
     printf("Header information\n");
     printf("MAGIC: %.*s\n", 8, (char*)&header->magic);
-    printf("ENDIANNESS: %hhu\n", header->endianness);
     printf("VERSION: %hu\n", header->version);
-    printf("FLAGS: %hu\n", header->flags);
+    printf("FLAGS1: %hhu\n", header->flags1);
+    printf("FLAGS2: %hhu\n", header->flags2);
     printf("CHECK_SUM: 0x%lx%lx\n", *(u64*)header->checksum + 8, *(u64*)header->checksum);
     printf("N_SECTIONS: %u\n", header->n_sections);
 

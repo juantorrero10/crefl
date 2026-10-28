@@ -44,9 +44,9 @@ typedef u32 index_table_offset;
 typedef struct CREFL_PACKED
 {
     u64    magic;             // "CREFLX64"
-    u8     endianness;        // 00 little endian, 01 big endian
     u16    version;           // 00 00
-    u16    flags;             // Maybe useful in the future
+    u8     flags1;            
+    u8     flags2;
     u8     checksum[16];
     u32    n_sections;        // 7
 } CREFL_Header;
