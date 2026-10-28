@@ -6,7 +6,7 @@ import parser
 VERSION = int(0)
 MAGIC = b'CREFLX64'
 FLAGS = int(0)
-# CHECKSUM_OFFSET = 13
+CHECKSUM_OFFSET = 13
 N_SECTIONS = int(7)
 N_HASH_TABLES = int(3)
 
