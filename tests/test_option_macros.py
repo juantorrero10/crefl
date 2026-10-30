@@ -1,11 +1,12 @@
 import os
 from pathlib import Path
+import struct
 import sys
 import tempfile
 import unittest
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "crefl_gen"))
 
 import generator
@@ -46,6 +47,15 @@ REFLECT(struct) {
                 ).generate("unused.crefl")
                 writer.CreflWriter("fixture.crefl", checksum, reflected).write()
                 generated_crefl = Path("fixture.crefl").read_bytes()
+                stored_checksum = struct.unpack_from(
+                    "<16s", generated_crefl, writer.CHECKSUM_OFFSET
+                )[0]
+                self.assertEqual(stored_checksum, checksum)
+
+                cached_result = generator.CReflEngine(
+                    ["option_fixture.h"], stored_checksum
+                ).generate("unused.crefl")
+                self.assertEqual(cached_result, (None, None))
             finally:
                 os.chdir(original_directory)
 

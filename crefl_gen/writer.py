@@ -6,11 +6,12 @@ import parser
 VERSION = int(0)
 MAGIC = b'CREFLX64'
 FLAGS = int(0)
-CHECKSUM_OFFSET = 13
+HEADER_FORMAT = "<8s B B H 16s I"
+CHECKSUM_OFFSET = struct.calcsize("<8s B B H")
 N_SECTIONS = int(7)
 N_HASH_TABLES = int(3)
 
-SIZE_HEADER = 32
+SIZE_HEADER = struct.calcsize(HEADER_FORMAT)
 SIZE_SECTION_TABLE = 20
 SIZE_FIELD = 28
 SIZE_STRUCT = 20
@@ -89,9 +90,9 @@ class CreflWriter:
     } CREFL_Header;
     """
     def _get_header(self) -> bytes:
-        self.cur += (8 + 2 + 2 + 16 + 4)
+        self.cur += SIZE_HEADER
         return struct.pack(
-            "<8s B B H 16s I",
+            HEADER_FORMAT,
             MAGIC,
             VERSION,
             FLAGS & 0xFF,

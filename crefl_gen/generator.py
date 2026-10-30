@@ -7,6 +7,7 @@ import subprocess as sb
 import hashlib
 import shutil
 import struct
+from pathlib import Path
 
 TEMP_WD = "__temp__crefl"
 BIG_H = "__reflected_types.h"
@@ -135,7 +136,11 @@ class CReflEngine:
         with open(BIG_H, "w") as f:
             f.write(combined)
 
-        new_checksum = hashlib.md5(combined.encode("utf-8")).digest()
+        checksum_input = [combined]
+        injected_headers = Path(file_path, "inyect_headers")
+        for header in sorted(injected_headers.glob("*.h")):
+            checksum_input.extend((header.name, header.read_text(encoding="utf-8")))
+        new_checksum = hashlib.md5("\0".join(checksum_input).encode("utf-8")).digest()
 
         if self.checksum == new_checksum:
             # Checksum matches, nothing to be done
