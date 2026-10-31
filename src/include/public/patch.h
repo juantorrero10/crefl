@@ -1,6 +1,12 @@
 #ifndef PUBLIC_PATCH_H_
 #define PUBLIC_PATCH_H_
 
+#include "core.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 REFLECT(enum) {
     RPA_RENAME_TYPE,
     RPA_ADD_FIELD,
@@ -24,7 +30,13 @@ typedef struct {
     } action_data;
 } RPatch;
 
+
+
 REnum* refl_patch_enum(REnum* old, RPatch patch );
 RStruct* refl_patch_struct(RStruct* old, RPatch* patches, size_t n);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // PUBLIC_PATCH_H_

@@ -8,6 +8,10 @@
 
 #include "types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern char* G_STRING_POOL;
 
 /**
@@ -49,6 +53,8 @@ void refl_generic_destructor(RStruct* t, RObject instance);
 RObject refl_object_deepcopy(RStruct* t, const RObject instance);
 
 
-
+#ifdef __cplusplus
+}
+#endif
 
 #endif // REFL_H_

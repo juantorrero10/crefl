@@ -7,13 +7,13 @@
 #include <string.h>
 #include <errno.h>
 
-#include <crefl/types.h>
-#include <crefl/scope.h>
-#include <crefl/core.h>
+#include <public/types.h>
+#include <public/scope.h>
+#include <public/core.h>
 
-#include <_fetched.h>
-#include <_dot_crefl.h>
-#include <_arena.h>
+#include <private/metadata.h>
+#include <private/crefl_file.h>
+#include <private/arena.h>
 
 
 CREFL_Section_table* sections_tables = NULL;

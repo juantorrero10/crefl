@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <crefl/serial/err.h>
+#include <public/serial/err.h>
 
 
 char* deserialize_strerror(DeserializeError e) {

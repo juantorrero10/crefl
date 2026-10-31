@@ -2,14 +2,14 @@
 set -euo pipefail
 
 # ---- Config ----
-OUT_DIR="./extracted"
+OUT_DIR="./out"
 SRC_DIR="src"
 GEN_DIR="crefl_gen"
 LIB_PATH="build/lib/libcrefl.a"   # <- adjust if needed
 
 echo "==> Building project"
 if [[ $# -gt 0 ]]; then 
-    make static -j4 OPT=$1
+    make static -j4 OPT="$1"
 else
     make static -j4 OPT=3
 fi
@@ -35,15 +35,15 @@ else
     echo "!! Warning: $LIB_PATH not found, skipping"
 fi
 
-# ---- Copy headers (preserve structure, skip _*) ----
+# ---- Copy headers (from src/include/public to out/include/crefl) ----
 echo "==> Copying public headers"
-
-while IFS= read -r -d '' header; do
-    rel="${header#$SRC_DIR/}"
-    dest_dir="$OUT_DIR/$(dirname "$rel")"
-    mkdir -p "$dest_dir"
-    cp "$header" "$dest_dir/"
-done < <(find "$SRC_DIR" -type f -name "*.h" ! -name "_*" -print0)
+if [ -d "$SRC_DIR/include/public" ]; then
+    mkdir -p "$OUT_DIR/include/crefl"
+    # The /. at the end ensures we copy the contents of the folder, not the folder itself
+    cp -r "$SRC_DIR/include/public/". "$OUT_DIR/include/crefl/"
+else
+    echo "!! Warning: $SRC_DIR/include/public not found, skipping headers"
+fi
 
 echo "==> Done"
 echo "Output available at: $OUT_DIR"

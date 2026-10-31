@@ -1,7 +1,7 @@
 #ifndef SERIAL_GENERIC_WALKER_H_
 #define SERIAL_GENERIC_WALKER_H_
 
-#include <crefl/types.h>
+#include "../../public/types.h"
 
 
 

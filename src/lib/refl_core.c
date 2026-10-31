@@ -6,11 +6,12 @@
 #include <stdarg.h>
 
 
-#include <crefl/core.h>
-#include <crefl/types.h>
-#include <crefl/scope.h>
-#include <_fetched.h>
-#include <_arena.h>
+#include <public/core.h>
+#include <public/types.h>
+#include <public/scope.h>
+
+#include <private/metadata.h>
+#include <private/arena.h>
 
 refl_st_hashmap_t G_REFL_STRUCTS = { 0 };
 refl_un_hashmap_t G_REFL_UNIONS = { 0 };

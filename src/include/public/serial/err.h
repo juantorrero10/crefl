@@ -1,6 +1,10 @@
 #ifndef SERIAL_ERR_H_
 #define SERIAL_ERR_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     DE_NULL_PTR,
     DE_SYNTAX_ERROR,
@@ -33,6 +37,10 @@ typedef struct {
 } DeserializeResult;
 
 char* deserialize_strerror(DeserializeError e);
+
+#ifdef __cplusplus
+}
+#endif
 
 
 #endif // SERIAL_ERR_H_

@@ -8,6 +8,10 @@
 #   define __TLS _Thread_local
 #endif
 
+#include <stddef.h>
+
+
+
 void arena_init(size_t initial_cap, int manual_dealloc);
 void arena_tls_free();
 void* arena_alloc(int n, size_t sz);

@@ -1,8 +1,8 @@
-# crefl (C Reflection Engine) v0.1.0
+# Crefl (C Reflection Engine) v0.1.0
 
-**crefl** is a lightweight, efficient reflection engine built for C. 
+**Crefl** is a lightweight reflection engine built for C. 
 
-Because C does not natively support reflection, `crefl` bridges this gap by statically analyzing your code and providing a runtime mechanism to inspect types, structures, and metadata dynamically.
+Because C does not natively support reflection, `crefl` bridges this gap by statically inspecting types, generating metadata and provide the ability to load.
 
 ## 🧠 Architecture Overview
 
@@ -18,15 +18,16 @@ Once the Python generator extracts the type data, it packs this information into
 The final piece is the C runtime. By loading the `.CREFL` binary at startup, the `crefl` runtime allows your C programs to query their own types, check variable types at runtime, and safely inspect memory layouts dynamically without sacrificing performance.
 
 ## Installing dependencies
+ - Python dependencies: pycparser argparse
+ - C dependencies: GCC, Make
 
-Python dependencies: pycparser argparse
-C dependencies: GCC, Make
+## Building the C Runtime
+ - 
 
 ## Integrating into a proyect
-
-Add the command python3 -i [<Source files and headers>] -o [<Output file>]
+ - Add the command ```python3 crefl_gen -i [<Source files and headers>] -o [<Output file>]```
 to your build chain.
-Loading onto C:
+ - Loading onto C:
 ```c
 #include <crefl/core.h>
 

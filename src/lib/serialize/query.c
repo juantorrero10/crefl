@@ -2,13 +2,13 @@
 #include <ctype.h>
 #include <stdlib.h>
 
-#include <crefl/types.h>
-#include <crefl/cmp.h>
-#include <crefl/core.h>
+#include <public/types.h>
+#include <public/cmp.h>
+#include <public/core.h>
+#include <public/serial/err.h>
 
-#include <crefl/serial/err.h>
-#include <crefl/serial/_common.h>
-#include <_arena.h>
+#include <private/serial/common.h>
+#include <private/arena.h>
 
 /*
     COMMENTED OUT TO make it compile: WIP
@@ -230,7 +230,7 @@ skip_val:
     return RET_OK(NULL);
 }
 
-DeserializeResult deserialize_query(RStruct* restrict model, void* restrict stream, size_t stream_len) {
+DeserializeResult query_deserialize(RStruct* restrict model, void* restrict stream, size_t stream_len) {
     if (!model || stream_len == 0) return RET_ERR(DE_NULL_PTR);
     stream_walker sw = { .buff = stream, .cur = 0, .eof = stream_len };
     size_t brk = arena_get_brk();
@@ -263,7 +263,7 @@ DeserializeResult deserialize_query(RStruct* restrict model, void* restrict stre
     return dr;
 }*/
 
-DeserializeResult deserialize_query(RStruct* restrict model, void* restrict stream, size_t stream_len) {
+DeserializeResult query_deserialize(RStruct* restrict model, void* restrict stream, size_t stream_len) {
     (void)model;
     (void)stream_len;
     (void)stream;

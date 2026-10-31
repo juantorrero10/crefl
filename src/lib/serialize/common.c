@@ -6,11 +6,11 @@
 #include <ctype.h>
 #include <stdint.h>
 
-#include <crefl/types.h>
-#include <crefl/core.h>
+#include <public/types.h>
+#include <public/core.h>
 
-#include <crefl/serial/_common.h>
-#include <_arena.h>
+#include <private/serial/common.h>
+#include <private/arena.h>
 #define BUFFERS_INITIAL 64
 
 void generic_numeric_to_str(RPrimitive p, u64 bytes, void* buff, size_t sz) {

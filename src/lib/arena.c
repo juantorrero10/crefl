@@ -1,12 +1,12 @@
 #include <sys/mman.h>
 #include <stdint.h>
-#include <_arena.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
 
-#include <crefl/types.h>
+#include <public/types.h>
+#include <private/arena.h>
 
 typedef struct {
     u8* arena;

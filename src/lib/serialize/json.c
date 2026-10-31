@@ -8,13 +8,13 @@
 #include <stdbool.h>
 #include <assert.h>
 
-#include <crefl/types.h>
-#include <crefl/cmp.h>
-#include <crefl/core.h>
+#include <public/types.h>
+#include <public/cmp.h>
+#include <public/core.h>
+#include <public/serial/err.h>
 
-#include <crefl/serial/_common.h>
-#include <crefl/serial/err.h>
-#include <_arena.h>
+#include <private/serial/common.h>
+#include <private/arena.h>
 
 
 #define MAX(a, b) ((a) > (b))? (a) : (b)
@@ -79,7 +79,7 @@
 #define currchar jw->buff[jw->cur]
 
 
-size_t serialize_json(RStruct* s, RObject instance, void** out ,int pretty) {
+size_t json_serialize(RStruct* s, RObject instance, void** out ,int pretty) {
     SerializePolicy sp = {
         .arr_end = " ]",
         .arr_start = "[ ",
@@ -638,7 +638,7 @@ return_err:
  * @returns Result, either the data or an error.
  * @attention non-homogeneus arrays are not allowed for now.
  */
-DeserializeResult deserialize_json(RStruct* model, void* stream, size_t len) {
+DeserializeResult json_deserialize(RStruct* model, void* stream, size_t len) {
     if (!model) return RET_ERR(DE_NULL_PTR);
     stream_walker jw = { .cur = 0, .eof = len };
     size_t brk = arena_get_brk();

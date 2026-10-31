@@ -4,10 +4,11 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-#ifndef __linux__
-#error "Only linux supported for the moment"
+#ifdef __cplusplus
+extern "C" {
 #endif
 
+#ifndef _WIN32
 typedef signed char i8;
 typedef short i16;
 typedef int i32;
@@ -16,6 +17,17 @@ typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
 typedef unsigned long u64;
+#else
+typedef signed char i8;
+typedef short i16;
+typedef int i32;
+typedef long long i64;
+typedef unsigned char u8;
+typedef unsigned short u16;
+typedef unsigned int u32;
+typedef unsigned long long u64;
+#endif
+
 
 #define REFLECT(type) typedef type
 //#define OPTION(type) r_option_t
@@ -129,5 +141,9 @@ typedef struct _CREFL_DYN_ARRAY {
     size_t chunk_size;
 } r_array_t;
 
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // REFL_TYPES_H_

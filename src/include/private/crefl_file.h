@@ -6,6 +6,7 @@
  * Definitions for parsing the .CREFL file
  */
 #include <stdint.h>
+#include "../public/types.h"
 
 #if defined(__GNUC__) || defined(__clang__)
 #  define CREFL_PACKED __attribute__((packed))

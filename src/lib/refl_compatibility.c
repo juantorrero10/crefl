@@ -6,9 +6,9 @@
 #include <assert.h>
 #include <stdbool.h>
 
-#include <crefl/core.h>
-#include <crefl/types.h>
-#include <crefl/cmp.h>
+#include <public/core.h>
+#include <public/types.h>
+#include <public/cmp.h>
 
 
 #if defined(__GNUC__)

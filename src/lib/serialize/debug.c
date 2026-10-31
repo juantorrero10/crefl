@@ -2,12 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <crefl/types.h>
-#include <crefl/core.h>
+#include <public/types.h>
+#include <public/core.h>
 
-#include <crefl/serial/_common.h>
+#include <private/serial/common.h>
 
-void debug_print_struct(RStruct* s, RObject instance, int __pretty) {
+void dbg_print(RStruct* s, RObject instance, int __pretty) {
     SerializePolicy sp = {
         .arr_end = "]",
         .arr_start = "[",

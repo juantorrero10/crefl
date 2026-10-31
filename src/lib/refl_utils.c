@@ -1,7 +1,7 @@
 #include <string.h>
 
-#include <crefl/core.h>
-#include <crefl/types.h>
+#include <public/core.h>
+#include <public/types.h>
 #include <stdbool.h>
 
 
