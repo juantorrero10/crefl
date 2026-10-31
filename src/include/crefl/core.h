@@ -1,6 +1,10 @@
 #ifndef REFL_H_
 #define REFL_H_
 
+#define CREFL_VERSION_MAJOR 0
+#define CREFL_VERSION_MINOR 1
+#define CREFL_VERSION_PATCH 0
+
 
 #include "types.h"
 
