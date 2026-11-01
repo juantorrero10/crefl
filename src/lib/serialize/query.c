@@ -59,8 +59,15 @@ static inline RField* qp_search_field(RStruct* restrict m, const char* restrict 
     return NULL;
 }
 
-static inline char* qp_alloc_and_url_decode_string(const char* str, size_t len) {
-    char* ret = malloc(len + 1);
+static inline char* qp_url_decode_string(
+    const char* restrict str,
+    size_t len,
+    size_t* restrict out_len,
+    bool malloc_it
+) {
+    char* ret = (malloc_it)? malloc(len + 1) : arena_alloc(0, len + 1);
+    if (!ret) return NULL;
+    if (!malloc_it && arena_memory_failed()) return NULL;
     char digits_buff[3] = {0};
     size_t dst_curr_off = 0;
     for (size_t i = 0; i < len; i++)
@@ -77,6 +84,7 @@ static inline char* qp_alloc_and_url_decode_string(const char* str, size_t len) 
         ret[dst_curr_off++] = str[i];
     }
     ret[dst_curr_off] = '\0';
+    *out_len = dst_curr_off;
     return ret;
 }
 
@@ -85,7 +93,7 @@ struct mock_optional {
     void* val;
 };
 
-static inline void qp_insert_into_instance(
+static inline int qp_insert_into_instance(
     RField* restrict f_schema, 
     u8* restrict instance, 
     u8* restrict val, 
@@ -107,20 +115,57 @@ static inline void qp_insert_into_instance(
         r_array_t* da = (r_array_t*)(instance + off);
         if (field_freq == 1) {
             da->array = calloc(DYN_ARRAY_CAPACITY, val_sz);
+            if (!da->array) return 0;
             da->size = 0;
             da->capacity = DYN_ARRAY_CAPACITY;
             da->chunk_size = val_sz;
         } else if (da->size >= da->capacity) {
-            da->capacity <<= 1;
-            da->array = realloc(da->array, da->capacity * da->chunk_size);
-            memset(da->array + (da->size * da->chunk_size), 0, (da->size * da->chunk_size));
+            size_t old_capacity = da->capacity;
+            size_t new_capacity = old_capacity * 2;
+            void* new_array = realloc(da->array, new_capacity * da->chunk_size);
+            if (!new_array) return 0;
+            da->array = new_array;
+            da->capacity = new_capacity;
+            memset(
+                (u8*)da->array + old_capacity * da->chunk_size,
+                0,
+                (new_capacity - old_capacity) * da->chunk_size
+            );
         }
         da->size++;
-        memcpy(da->array + ((field_freq - 1) * val_sz), val, val_sz);
-        return;
+        memcpy((u8*)da->array + ((field_freq - 1) * val_sz), val, val_sz);
+        return 1;
     }
     // Regular copy
     memcpy(instance + off, val, val_sz);
+    return 1;
+}
+
+static inline int qp_num_convert(
+    RPrimitive prim_expected,
+    const char* restrict str,
+    size_t str_len,
+    u64* converted
+) {
+    u64 observed_number;
+    RPrimitive observed_prim;
+    stream_walker s = (stream_walker){ .buff = (u8*)str, .cur = 0, .eof = str_len };
+    if (!generic_str_to_numeric(
+        &s,
+        &observed_number,
+        &observed_prim
+    ) || s.cur != s.eof) return 0;
+    if (!refl_primitive_can_promote(observed_prim, prim_expected))
+        return 0;
+
+    *converted = 0;
+    refl_primitive_convert(
+        observed_prim,
+        prim_expected,
+        &observed_number,
+        converted
+    );
+    return 1;
 }
 
 
@@ -138,6 +183,7 @@ static DeserializeResult qp_parse(
     RField* field;
     size_t field_idx = (size_t)-1;
     RKind unwrapped_kind;
+    RField* value_field;
 reading_key:
     str_start = (const char*)sw->buff + sw->cur;
     str_start_off = sw->cur;
@@ -173,32 +219,38 @@ reading_key:
     //  - Find target type (unwrapper_kind)
     //  - Figure out how many values that fields holds
     unwrapped_kind = field->kind;
+    value_field = field;
     switch (field->kind) {
         case K_STRUCT:
         case K_UNION:
         case K_POINTER:
             return RET_ERR(DE_TARGET_TYPE_TOO_COMPLEX);
         case K_OPTION: 
-            unwrapped_kind = field->subtype.subfield->kind;
+            value_field = field->subtype.subfield;
+            unwrapped_kind = value_field->kind;
             switch (unwrapped_kind) {
                 case K_DYN_ARRAY: 
                     field_holds = (size_t)-1;
-                    unwrapped_kind = field->subtype.subfield->subtype.subfield->kind;
+                    value_field = value_field->subtype.subfield;
+                    unwrapped_kind = value_field->kind;
                     break;
                 case K_FIXED_ARRAY:
-                    field_holds = field->subtype.subfield->size;
-                    unwrapped_kind = field->subtype.subfield->subtype.subfield->kind;
+                    field_holds = value_field->size;
+                    value_field = value_field->subtype.subfield;
+                    unwrapped_kind = value_field->kind;
                     break;
                 default: break;
             }
             break;
         case K_DYN_ARRAY:
             field_holds = (size_t)-1;
-            unwrapped_kind = field->subtype.subfield->kind;
+            value_field = field->subtype.subfield;
+            unwrapped_kind = value_field->kind;
             break;
         case K_FIXED_ARRAY:
             field_holds = field->size;
-            unwrapped_kind = field->subtype.subfield->kind;
+            value_field = field->subtype.subfield;
+            unwrapped_kind = value_field->kind;
             break;
         default:
             break;
@@ -208,20 +260,46 @@ reading_key:
 
     switch (unwrapped_kind) {
         case K_STRING:
-        // TODO: Enum label and numeric conversion
-        // case K_PRIMITIVE:
-        // case K_ENUM: 
+        case K_PRIMITIVE:
             break;
         default: return RET_ERR(DE_TARGET_TYPE_TOO_COMPLEX);
     }
 
-    // Only string for now
     str_start = (const char*)sw->buff + sw->cur;
     str_start_off = sw->cur;
     while(currchar != '&' && sw->cur < sw->eof) sw->cur++;
-    char* field_val = qp_alloc_and_url_decode_string(str_start, (sw->cur - str_start_off));
-    // Insert pointer into instance
-    qp_insert_into_instance(field, instance, (u8*)&field_val, sizeof(void*), key_freqs[field_idx]);
+    size_t len;
+    void* field_val = qp_url_decode_string(
+        str_start,
+        (sw->cur - str_start_off),
+        &len,
+        unwrapped_kind == K_STRING
+    );
+    if (!field_val) return RET_ERR(DE_MEMORY_ERROR);
+
+    size_t field_sz;
+    void* value_to_insert;
+    u64 converted;
+    if (unwrapped_kind == K_PRIMITIVE) {
+        if (!qp_num_convert(value_field->subtype.prim, field_val, len, &converted))
+            return RET_ERR(DE_NUMBER_CONVERSION_ERROR);
+        value_to_insert = &converted;
+        field_sz = refl_prim_to_size(value_field->subtype.prim);
+    } else {
+        value_to_insert = &field_val;
+        field_sz = sizeof(field_val);
+    }
+
+    if (!qp_insert_into_instance(
+        field,
+        instance,
+        value_to_insert,
+        field_sz,
+        key_freqs[field_idx]
+    )) {
+        if (unwrapped_kind == K_STRING) free(field_val);
+        return RET_ERR(DE_MEMORY_ERROR);
+    }
     if (sw->cur < sw->eof) sw->cur++;
     goto reading_key;
 
@@ -234,27 +312,28 @@ skip_val:
 DeserializeResult query_deserialize(RStruct* restrict schema, void* restrict stream, size_t stream_len) {
     if (!schema || stream_len == 0) return RET_ERR(DE_NULL_PTR);
     stream_walker sw = { .buff = stream, .cur = 0, .eof = stream_len };
-    size_t brk = arena_get_brk();
-    u8* instance = arena_alloc(0, schema->total_size);
-    memset(instance, 0, schema->total_size);
+    size_t arena_brk = arena_get_brk();
+    u8* instance = calloc(1, schema->total_size);
+    if (!instance) return RET_ERR(DE_MEMORY_ERROR);
     size_t* key_freqs = arena_alloc(0, sizeof(size_t) * schema->n_elements);
-    memset(key_freqs, 0, sizeof(size_t) * schema->n_elements);
-    
-    (void)sw;
-    (void)brk;
+    if (arena_memory_failed()) {
+        arena_set_brk(arena_brk);
+        free(instance);
+        return RET_ERR(DE_MEMORY_ERROR);
+    }
 
     DeserializeResult dr = qp_parse(schema, &sw, instance, key_freqs, schema->n_elements);
     if (dr.st == DR_OK) {
         if (sw.cur < sw.eof) {
-            arena_set_brk(brk);
+            refl_generic_destructor(schema, instance);
+            arena_set_brk(arena_brk);
             return RET_ERR(DE_EXPECTED_EOF);
         }
-        void* ret = malloc(schema->total_size);
-        memcpy(ret, instance, schema->total_size);
-        arena_set_brk(brk);
-        return RET_OK(ret);
+        arena_set_brk(arena_brk);
+        return RET_OK(instance);
     }
 
-    arena_set_brk(brk);
+    refl_generic_destructor(schema, instance);
+    arena_set_brk(arena_brk);
     return dr;
 }
