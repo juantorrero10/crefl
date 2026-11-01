@@ -6,6 +6,13 @@
 #include <public/serial/query.h>
 #include <public/types.h>
 
+REFLECT(enum) {
+    QUERY_COLOR_RED = 3,
+    QUERY_COLOR_GREEN = 7,
+    QUERY_COLOR_BLUE = 19
+} query_color_t;
+DECL_OPTION(query_color_t);
+
 REFLECT(struct) {
     strZ required;
     OPTION(strZ) optional;
@@ -16,6 +23,10 @@ REFLECT(struct) {
     OPTION(double) optional_number;
     i16 fixed_numbers[2];
     DYN_ARRAY(float) dynamic_numbers;
+    query_color_t color;
+    OPTION(query_color_t) optional_color;
+    query_color_t fixed_colors[2];
+    DYN_ARRAY(query_color_t) dynamic_colors;
 } query_params_t;
 
 int main(void) {
@@ -29,7 +40,10 @@ int main(void) {
         "required=present&optional=available&fixed=first&fixed=second"
         "&dynamic=alpha&dynamic=beta&integer=-42&decimal=20.5"
         "&optional_number=7.25&fixed_numbers=12&fixed_numbers=-3"
-        "&dynamic_numbers=1.5&dynamic_numbers=2.25";
+        "&dynamic_numbers=1.5&dynamic_numbers=2.25"
+        "&color=QUERY_COLOR_GREEN&optional_color=QUERY_COLOR_BLUE"
+        "&fixed_colors=QUERY_COLOR_RED&fixed_colors=QUERY_COLOR_BLUE"
+        "&dynamic_colors=QUERY_COLOR_GREEN&dynamic_colors=QUERY_COLOR_RED";
     DeserializeResult parsed = query_deserialize(
         query_type,
         (void*)query,
@@ -66,14 +80,24 @@ int main(void) {
         params->fixed_numbers[1] != -3 ||
         params->dynamic_numbers.size != 2 ||
         ((float*)params->dynamic_numbers.array)[0] != 1.5f ||
-        ((float*)params->dynamic_numbers.array)[1] != 2.25f) return 9;
+        ((float*)params->dynamic_numbers.array)[1] != 2.25f ||
+        params->color != QUERY_COLOR_GREEN ||
+        !params->optional_color.is_some ||
+        params->optional_color.data != QUERY_COLOR_BLUE ||
+        params->fixed_colors[0] != QUERY_COLOR_RED ||
+        params->fixed_colors[1] != QUERY_COLOR_BLUE ||
+        params->dynamic_colors.size != 2 ||
+        ((query_color_t*)params->dynamic_colors.array)[0] != QUERY_COLOR_GREEN ||
+        ((query_color_t*)params->dynamic_colors.array)[1] != QUERY_COLOR_RED) return 9;
 
     refl_generic_destructor(query_type, params);
 
     const char without_optional[] =
         "required=present&fixed=one&fixed=two&dynamic=single"
         "&integer=0&decimal=0.125&fixed_numbers=1&fixed_numbers=2"
-        "&dynamic_numbers=3.5";
+        "&dynamic_numbers=3.5&color=QUERY_COLOR_RED"
+        "&fixed_colors=QUERY_COLOR_BLUE&fixed_colors=QUERY_COLOR_GREEN"
+        "&dynamic_colors=QUERY_COLOR_BLUE";
     parsed = query_deserialize(
         query_type,
         (void*)without_optional,
@@ -97,7 +121,13 @@ int main(void) {
         params->fixed_numbers[0] != 1 ||
         params->fixed_numbers[1] != 2 ||
         params->dynamic_numbers.size != 1 ||
-        ((float*)params->dynamic_numbers.array)[0] != 3.5f) return 7;
+        ((float*)params->dynamic_numbers.array)[0] != 3.5f ||
+        params->color != QUERY_COLOR_RED ||
+        params->optional_color.is_some ||
+        params->fixed_colors[0] != QUERY_COLOR_BLUE ||
+        params->fixed_colors[1] != QUERY_COLOR_GREEN ||
+        params->dynamic_colors.size != 1 ||
+        ((query_color_t*)params->dynamic_colors.array)[0] != QUERY_COLOR_BLUE) return 7;
     refl_generic_destructor(query_type, params);
 
     const char missing_required[] = "required=allocated-before-error";
@@ -116,6 +146,15 @@ int main(void) {
         sizeof(invalid_numeric) - 1
     );
     if (parsed.st != DR_ERR || parsed.err != DE_NUMBER_CONVERSION_ERROR) return 10;
+
+    const char invalid_enum[] =
+        "required=allocated-before-error&color=QUERY_COLOR_PURPLE";
+    parsed = query_deserialize(
+        query_type,
+        (void*)invalid_enum,
+        sizeof(invalid_enum) - 1
+    );
+    if (parsed.st != DR_ERR || parsed.err != DE_LABEL_NOT_FOUND) return 11;
     printf("OK\n");
     return 0;
 }

@@ -88,11 +88,6 @@ static inline char* qp_url_decode_string(
     return ret;
 }
 
-struct mock_optional {
-    bool is_some;
-    void* val;
-};
-
 static inline int qp_insert_into_instance(
     RField* restrict f_schema, 
     u8* restrict instance, 
@@ -105,7 +100,7 @@ static inline int qp_insert_into_instance(
     if (f->kind == K_OPTION) {
         *(bool*)(instance + off) = true;
         f = f->subtype.subfield;
-        off += offsetof(struct mock_optional, val);
+        off += f->offset;
     }
     if (f->kind == K_FIXED_ARRAY) {
         off += (field_freq - 1) * val_sz;
@@ -261,6 +256,7 @@ reading_key:
     switch (unwrapped_kind) {
         case K_STRING:
         case K_PRIMITIVE:
+        case K_ENUM:
             break;
         default: return RET_ERR(DE_TARGET_TYPE_TOO_COMPLEX);
     }
@@ -280,11 +276,26 @@ reading_key:
     size_t field_sz;
     void* value_to_insert;
     u64 converted;
+    int enum_value;
     if (unwrapped_kind == K_PRIMITIVE) {
+        // Convert to number
         if (!qp_num_convert(value_field->subtype.prim, field_val, len, &converted))
             return RET_ERR(DE_NUMBER_CONVERSION_ERROR);
         value_to_insert = &converted;
         field_sz = refl_prim_to_size(value_field->subtype.prim);
+
+    } else if (unwrapped_kind == K_ENUM) {
+        // Convert to enum value if label is present
+        REnum* enum_type = value_field->subtype.e;
+        size_t enum_index;
+        for (enum_index = 0; enum_index < enum_type->n_elements; enum_index++) {
+            if (strcmp(field_val, enum_type->names[enum_index]) == 0) break;
+        }
+        if (enum_index == enum_type->n_elements)
+            return RET_ERR(DE_LABEL_NOT_FOUND);
+        enum_value = (int)enum_type->indexes[enum_index];
+        value_to_insert = &enum_value;
+        field_sz = refl_get_field_size(value_field);
     } else {
         value_to_insert = &field_val;
         field_sz = sizeof(field_val);
