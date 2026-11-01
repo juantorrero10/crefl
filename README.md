@@ -42,3 +42,10 @@ int main()
 }
 
 ```
+
+## Running tests
+
+Run the JSON deserialization and serialization tests with `make test_json`.
+Run the query deserialization tests with `make test_query`.
+The Python option-macro reflection tests can be run with
+`python3 tests/test_option_macros.py`.
