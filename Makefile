@@ -31,8 +31,6 @@ DEMO_C_FILES := $(shell find $(DEMO_DIR) -name "*.c")
 DEMO_OBJ     := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(DEMO_C_FILES))
 DEMO_BIN     := $(BIN_DIR)/crefl_demo
 
-<<<<<<< Updated upstream
-=======
 # --- Serialization tests ---
 TEST_INPUT          := $(filter-out $(DEMO_DIR)/demo.c,$(PY_INPUT))
 QUERY_TEST_SRC      := tests/query_deserialization.c
@@ -41,8 +39,6 @@ QUERY_TEST_BIN      := $(BIN_DIR)/query_deserialization
 JSON_TEST_SRC       := tests/json_deserialization.c
 JSON_TEST_METADATA  := build/json_test.crefl
 JSON_TEST_BIN       := $(BIN_DIR)/json_deserialization
-
->>>>>>> Stashed changes
 # --- Library outputs ---
 SHARED_LIB = $(LIB_DIR)/lib$(TARGET).so
 STATIC_LIB = $(LIB_DIR)/lib$(TARGET).a
@@ -100,8 +96,6 @@ run_demo: build_demo
 	@$(DEMO_BIN)
 
 # =========================================================
-<<<<<<< Updated upstream
-=======
 # Query test
 # =========================================================
 $(QUERY_TEST_METADATA): $(TEST_INPUT) $(QUERY_TEST_SRC) | $(BIN_DIR)
@@ -128,7 +122,6 @@ test_json: $(JSON_TEST_BIN)
 
 
 # =========================================================
->>>>>>> Stashed changes
 # Directories
 # =========================================================
 $(BIN_DIR) $(LIB_DIR):
@@ -143,8 +136,4 @@ clean:
 
 -include $(DEPS)
 
-<<<<<<< Updated upstream
-.PHONY: all static clean run_demo build_demo
-=======
 .PHONY: all static clean run_demo build_demo test_query test_json
->>>>>>> Stashed changes
