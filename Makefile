@@ -37,6 +37,15 @@ QUERY_TEST_INPUT    := $(filter-out $(DEMO_DIR)/demo.c,$(PY_INPUT))
 QUERY_TEST_METADATA := build/query_test.crefl
 QUERY_TEST_BIN      := $(BIN_DIR)/query_option_and_arrays
 
+# --- Serialization tests ---
+TEST_INPUT          := $(filter-out $(DEMO_DIR)/demo.c,$(PY_INPUT))
+QUERY_TEST_SRC      := tests/query_deserialization.c
+QUERY_TEST_METADATA := build/query_test.crefl
+QUERY_TEST_BIN      := $(BIN_DIR)/query_deserialization
+JSON_TEST_SRC       := tests/json_deserialization.c
+JSON_TEST_METADATA  := build/json_test.crefl
+JSON_TEST_BIN       := $(BIN_DIR)/json_deserialization
+
 # --- Library outputs ---
 SHARED_LIB = $(LIB_DIR)/lib$(TARGET).so
 STATIC_LIB = $(LIB_DIR)/lib$(TARGET).a
@@ -109,6 +118,32 @@ test_query: $(QUERY_TEST_BIN)
 
 
 # =========================================================
+# Query test
+# =========================================================
+$(QUERY_TEST_METADATA): $(TEST_INPUT) $(QUERY_TEST_SRC) | $(BIN_DIR)
+	$(PY_GEN) -i $(TEST_INPUT) $(QUERY_TEST_SRC) -o $@
+
+$(QUERY_TEST_BIN): $(QUERY_TEST_SRC) $(QUERY_TEST_METADATA) $(SHARED_LIB) | $(BIN_DIR)
+	$(CC) $(BASE_CFLAGS) -DCREFL_FILE=\"$(QUERY_TEST_METADATA)\" -o $@ $< \
+		-L$(LIB_DIR) -l$(TARGET) \
+		-Wl,-rpath,$(LIB_DIR)
+
+test_query: $(QUERY_TEST_BIN)
+	@$(QUERY_TEST_BIN)
+
+$(JSON_TEST_METADATA): $(TEST_INPUT) $(JSON_TEST_SRC) | $(BIN_DIR)
+	$(PY_GEN) -i $(TEST_INPUT) $(JSON_TEST_SRC) -o $@
+
+$(JSON_TEST_BIN): $(JSON_TEST_SRC) $(JSON_TEST_METADATA) $(SHARED_LIB) | $(BIN_DIR)
+	$(CC) $(BASE_CFLAGS) -DCREFL_FILE=\"$(JSON_TEST_METADATA)\" -o $@ $< \
+		-L$(LIB_DIR) -l$(TARGET) \
+		-Wl,-rpath,$(LIB_DIR)
+
+test_json: $(JSON_TEST_BIN)
+	@$(JSON_TEST_BIN)
+
+
+# =========================================================
 # Directories
 # =========================================================
 $(BIN_DIR) $(LIB_DIR):
@@ -123,4 +158,4 @@ clean:
 
 -include $(DEPS)
 
-.PHONY: all static clean run_demo build_demo test_query
+.PHONY: all static clean run_demo build_demo test_query test_json

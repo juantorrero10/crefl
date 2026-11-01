@@ -1,4 +1,4 @@
-# Crefl (C Reflection Engine) v0.1.0
+# Crefl (C Reflection Engine) v0.1.1
 
 **Crefl** is a lightweight reflection engine built for C. 
 
@@ -43,3 +43,10 @@ int main()
 }
 
 ```
+
+## Running tests
+
+Run the JSON deserialization and serialization tests with `make test_json`.
+Run the query deserialization tests with `make test_query`.
+The Python option-macro reflection tests can be run with
+`python3 tests/test_option_macros.py`.

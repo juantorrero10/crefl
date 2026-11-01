@@ -219,8 +219,7 @@ static DeserializeResult _json_dsval(
     stream_walker* jw,
     struct _json_nesting_stack* jss,
     size_t offset,
-    unordered_buffer* instance,
-    size_t* non_optional_counter
+    unordered_buffer* instance
 ) {
     (void)jss;
     while (skip_chars(currchar)) jw->cur++;
@@ -231,7 +230,6 @@ static DeserializeResult _json_dsval(
     u8 bool_val = 0;
     bool scaped=0;          // scaping chars like \" \n \t
     bool wrapped_dst = model->kind == K_OPTION;
-    if (!wrapped_dst && non_optional_counter) (*non_optional_counter)++;
     u8* dst = instance->data + offset + model->offset;
     switch (currchar)
     {
@@ -436,7 +434,7 @@ static DeserializeResult _json_dsarr(
             DeserializeResult dr = _json_dsval(
                 array->subtype.subfield, jw, jss, 
                 0, 
-                &fake_instance, NULL);
+                &fake_instance);
             if (dr.st == DR_ERR) {
                 arena_dealloc(0, sz * n_elements);
                 return RET_ERR(dr.err);   
@@ -462,8 +460,7 @@ static DeserializeResult _json_dsarr(
                 jw,
                 jss,
                 0,
-                &fake_instance,
-                NULL
+                &fake_instance
             );
             n_elements++;
             if (dr.st == DR_ERR) {
@@ -499,7 +496,10 @@ static DeserializeResult _json_dsobj(
     size_t n_elements=0;
     size_t curr_nest_lvl = jss->sp;
     RField* model_curr = NULL;
+    size_t model_idx = 0;
     size_t non_optinal_counter = 0;
+    bool seen_fields[model->n_elements ? model->n_elements : 1];
+    memset(seen_fields, 0, sizeof(seen_fields));
     
     DeserializeError de;
 init:
@@ -543,7 +543,7 @@ reading_value:
             de = DE_UNEXPECTED_CHARACTER; goto return_err;}
         jw->cur++;
         while (skip_chars(currchar)) jw->cur++;
-        DeserializeResult dr = _json_dsval(model_curr, jw, jss, offset, instance, &non_optinal_counter);
+        DeserializeResult dr = _json_dsval(model_curr, jw, jss, offset, instance);
         if (dr.st == DR_ERR) {
             de = dr.err; goto return_err;
         }
@@ -555,6 +555,15 @@ carve_key:
         if (!model_curr) {
             substr_start = (size_t)-1;
             goto skip_field;
+        }
+        for (model_idx = 0; model_idx < model->n_elements; model_idx++) {
+            if (model->fields[model_idx] == model_curr) break;
+        }
+        if (model_idx < model->n_elements &&
+            model_curr->kind != K_OPTION &&
+            !seen_fields[model_idx]) {
+            seen_fields[model_idx] = true;
+            non_optinal_counter++;
         }
         jw->cur++;
         substr_start = (size_t)-1;
@@ -651,6 +660,7 @@ DeserializeResult json_deserialize(RStruct* model, void* stream, size_t len) {
 
     void* returned_instance = NULL;
     if (jw.cur == jw.eof) {
+        arena_set_brk(brk);
         return RET_ERR(DE_EMPTY_STREAM);
     }
     
@@ -669,22 +679,31 @@ DeserializeResult json_deserialize(RStruct* model, void* stream, size_t len) {
         }
         jw.cur++;
     }
-    // Trailing stuff
-    jw.cur++;
-    while(skip_chars(jw.buff[jw.cur])) jw.cur++;
-    
-    
+
+    if (jw.cur == jw.eof && ret.st == DR_OK) {
+        ret = RET_ERR(DE_EMPTY_STREAM);
+    }
+
     if (ret.st == DR_OK) {
+        if (jw.cur < jw.eof) jw.cur++;
+        while (jw.cur < jw.eof && skip_chars(jw.buff[jw.cur])) jw.cur++;
+
         // Expect EOF
         if (jw.cur < jw.eof) {
-            arena_set_brk(brk);
-            return RET_ERR(DE_EXPECTED_EOF);
+            ret = RET_ERR(DE_EXPECTED_EOF);
+        } else {
+            returned_instance = malloc(model->total_size);
+            memcpy(returned_instance, uob.data, model->total_size);
+            ret.data.buff = returned_instance;
         }
+    }
 
-        returned_instance = malloc(model->total_size);
-        memcpy(returned_instance, uob.data, model->total_size);
-        ret.data.buff = returned_instance;
-        
+    if (ret.st == DR_ERR) {
+        void* failed_instance = malloc(model->total_size);
+        if (failed_instance) {
+            memcpy(failed_instance, uob.data, model->total_size);
+            refl_generic_destructor(model, failed_instance);
+        }
     }
 
 
