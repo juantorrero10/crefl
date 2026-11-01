@@ -27,12 +27,13 @@ void dbg_print(RStruct* s, RObject instance, int __pretty) {
         .opt_some_start = "Some(",
         .opt_some_end = ")",
         .unwrap_optionals = 0,
+        .repeat_array_fields = 0,
         .pretty = __pretty,
         .str_end = "\"",
         .str_start = "\"",
         .null_ptr = "0x0",
         .null_str = "(null)",
-        .scape_special_ascii = 1
+        .string_encode = json_scape_string
     };
     char* out;
     size_t _sz = walk_type(&sp, s, instance, (void**)&out);

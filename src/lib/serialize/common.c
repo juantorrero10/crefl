@@ -155,28 +155,26 @@ int generic_str_to_numeric(
     return 1;
 }
 
-typedef struct {
-    char* buff;
-    size_t size;
-    size_t cap;
-} char_vec;
+typedef serializer_string_buffer char_vec;
 
-static void str_push(char_vec* cv, const char* str) {
-    if (str == NULL) {
-        str_push(cv, ("(null)"));
-        return;
-    }
-    size_t sz = strlen(str);
-
+void serializer_append(char_vec* cv, const char* data, size_t sz) {
     while (cv->size + sz + 1 > cv->cap) {
         arena_alloc(0, cv->cap);
         cv->cap *= 2;
     }
 
-    memcpy(cv->buff + cv->size, str, sz);
+    memcpy(cv->buff + cv->size, data, sz);
     cv->size += sz;
     cv->buff[cv->size] = '\0';
 }
+
+static void str_push(char_vec* cv, const char* str) {
+    if (str == NULL) {
+        str = "(null)";
+    }
+    serializer_append(cv, str, strlen(str));
+}
+
 
 static void str_push_sized(char_vec* cv, const char* str, size_t sz) {
     if (str == NULL) {
@@ -184,14 +182,7 @@ static void str_push_sized(char_vec* cv, const char* str, size_t sz) {
         return;
     }
 
-    while (cv->size + sz + 1 > cv->cap) {
-        arena_alloc(0, cv->cap);
-        cv->cap *= 2;
-    }
-
-    memcpy(cv->buff + cv->size, str, sz);
-    cv->size += sz;
-    cv->buff[cv->size] = '\0';
+    serializer_append(cv, str, sz);
 }
 
 static void char_push(char_vec* cv, int c) {
@@ -223,10 +214,10 @@ const char* scape_search = "\\\n\t\b\r\f\"";
 
 #define MEMCPY_MIN 16
 
-static void scape_string(char_vec* cv, char* str) {
-    char* curr = str;
-    char* next_esc;
-    char* escaped;
+void json_scape_string(serializer_string_buffer* cv, const char* str) {
+    const char* curr = str;
+    const char* next_esc;
+    const char* escaped;
     size_t chunk;
     while((next_esc = strpbrk(curr, scape_search)) != NULL) {
         
@@ -239,7 +230,7 @@ static void scape_string(char_vec* cv, char* str) {
             while(chunk) {char_push(cv, *(curr++)); chunk--;}
         }
 __skip_copying:
-        escaped = (char*)_escape_lut[(u32)(*(curr++))];
+        escaped = _escape_lut[(u32)(*(curr++))];
         str_push_sized(cv, escaped, 2);
     }
     // copy the tail
@@ -280,8 +271,8 @@ static void gc_field(SerializePolicy* sp, RField* f, void* instance, int indent,
                 break;
             }
 
-            if (sp->scape_special_ascii) {
-                scape_string(v, str);
+            if (sp->string_encode) {
+                sp->string_encode(v, str);
             } else {
                 str_push(v, str);
             }
@@ -357,29 +348,70 @@ static void gc_struct(SerializePolicy* sp, RStruct* s, void* instance, int inden
     str_push(v, sp->obj_start);
     if (sp->pretty) str_push(v, sp->newline);
     indent++;
-    int skip;
+    int emitted_field = 0;
     for (size_t i = 0; i < s->n_elements; i++)
     {
-        skip = 0;
-        
         RField* f = s->fields[i];
-        // Lookahead for NONE + unwrap_optionals
+        RField* array_field = f;
+        void* array_instance = instance;
+        size_t array_offset = f->offset;
+
         if (sp->unwrap_optionals && f->kind == K_OPTION) {
-            void* option_value = (u8*)instance + f->offset;
-            if (!refl_option_is_some(option_value)) skip = 1;
+            array_instance = (u8*)instance + f->offset;
+            if (!refl_option_is_some(array_instance)) continue;
+            array_field = f->subtype.subfield;
+            array_offset = array_field->offset;
         }
-        if (!skip) {
-            if (sp->pretty) str_push_tabs(sp, v,indent);
-            if (sp->scape_keys)str_push(v, sp->key_start);
-            str_push(v, (char*)f->name);
-            if (sp->scape_keys) str_push(v, sp->key_end);
-            str_push(v, sp->key_val_sep);
-            gc_field(sp, f, instance, indent, v, buff2); 
-            if (i != s->n_elements - 1) {
-                str_push(v, sp->field_sep);
-                if (sp->pretty) str_push(v, sp->newline);
+
+        if (sp->repeat_array_fields &&
+            (array_field->kind == K_DYN_ARRAY ||
+             array_field->kind == K_FIXED_ARRAY)) {
+            size_t count;
+            size_t stride = refl_get_field_size(array_field->subtype.subfield);
+            u8* elements;
+            if (array_field->kind == K_DYN_ARRAY) {
+                r_array_t* array = (r_array_t*)((u8*)array_instance + array_offset);
+                count = array->size;
+                stride = array->chunk_size;
+                elements = array->array;
+            } else {
+                count = array_field->size;
+                elements = (u8*)array_instance + array_offset;
             }
+            for (size_t element_idx = 0; element_idx < count; element_idx++) {
+                if (emitted_field) {
+                    str_push(v, sp->field_sep);
+                    if (sp->pretty) str_push(v, sp->newline);
+                }
+                if (sp->pretty) str_push_tabs(sp, v, indent);
+                if (sp->scape_keys) str_push(v, sp->key_start);
+                str_push(v, (char*)f->name);
+                if (sp->scape_keys) str_push(v, sp->key_end);
+                str_push(v, sp->key_val_sep);
+                gc_field(
+                    sp,
+                    array_field->subtype.subfield,
+                    elements + element_idx * stride,
+                    indent,
+                    v,
+                    buff2
+                );
+                emitted_field = 1;
+            }
+            continue;
         }
+
+        if (emitted_field) {
+            str_push(v, sp->field_sep);
+            if (sp->pretty) str_push(v, sp->newline);
+        }
+        if (sp->pretty) str_push_tabs(sp, v, indent);
+        if (sp->scape_keys) str_push(v, sp->key_start);
+        str_push(v, (char*)f->name);
+        if (sp->scape_keys) str_push(v, sp->key_end);
+        str_push(v, sp->key_val_sep);
+        gc_field(sp, f, instance, indent, v, buff2);
+        emitted_field = 1;
     }
     indent--;
     if (sp->pretty) { 

@@ -20,7 +20,8 @@ run_test() {
 }
 
 run_test test_option_macros python3 tests/test_option_macros.py
-run_test test_query make test_query
+run_test test_query_deserialize make test_query_deserialize
+run_test test_query_serialize make test_query_serialize
 run_test test_json make test_json
 
 exit "$failed"

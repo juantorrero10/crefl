@@ -3,6 +3,17 @@
 
 #include "../../public/types.h"
 
+typedef struct {
+    char* buff;
+    size_t size;
+    size_t cap;
+} serializer_string_buffer;
+
+/* Appends encoded string contents; NULL means serialize strings unchanged. */
+typedef void (*serializer_string_encoder)(
+    serializer_string_buffer* buffer,
+    const char* string
+);
 
 
 typedef struct {
@@ -24,6 +35,7 @@ typedef struct {
     const char* null_ptr;
 
     int unwrap_optionals;           // Some("String") -> "String", None -> <Skip field>
+    int repeat_array_fields;
     const char* opt_some_start;
     const char* opt_some_end;
     const char* opt_none;
@@ -39,7 +51,7 @@ typedef struct {
     const char* indent_str;
     const char* newline;
 
-    int scape_special_ascii;
+    serializer_string_encoder string_encode;
 
 
     void (*format_primitive)(
@@ -111,6 +123,12 @@ typedef union {
 
 
 void generic_numeric_to_str(RPrimitive p, u64 bytes, void* buff, size_t sz);
+void serializer_append(
+    serializer_string_buffer* buffer,
+    const char* data,
+    size_t size
+);
+void json_scape_string(serializer_string_buffer* buffer, const char* string);
 size_t walk_type(SerializePolicy* sp, RStruct* s, RObject instance, void** out);
 
 

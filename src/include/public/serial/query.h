@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 DeserializeResult query_deserialize(RStruct* restrict model, void* restrict stream, size_t stream_len);
-
+size_t query_serialize(RStruct* s, RObject instance, void** out);
 
 #ifdef __cplusplus
 }

@@ -10,26 +10,6 @@
 #include <private/serial/common.h>
 #include <private/arena.h>
 
-#define num_detect(_char) ({\
-    int __ret = 2;\
-    switch(_char) {\
-        case '0':__ret=1;break;\
-        case '1':__ret=1;break;\
-        case '2':__ret=1;break;\
-        case '3':__ret=1;break;\
-        case '4':__ret=1;break;\
-        case '5':__ret=1;break;\
-        case '6':__ret=1;break;\
-        case '7':__ret=1;break;\
-        case '8':__ret=1;break;\
-        case '9':__ret=1;break;\
-        case '+':__ret=1;break;\
-        case '-':__ret=1;break;\
-        default:__ret=0;break;\
-    }\
-    __ret;\
-})
-
 #define key_valid(_char) ({\
     int __ret = 2;\
     if (isalnum(_char)) {\
@@ -48,6 +28,65 @@
 #define DYN_ARRAY_CAPACITY 16
 
 #define currchar sw->buff[sw->cur]
+
+static void query_url_encode(
+    serializer_string_buffer* buffer,
+    const char* string
+) {
+    static const char hex[] = "0123456789ABCDEF";
+    for (const unsigned char* current = (const unsigned char*)string;
+         *current;
+         current++) {
+        unsigned char c = *current;
+        int ascii_alphanumeric =
+            (c >= 'A' && c <= 'Z') ||
+            (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9');
+        if (ascii_alphanumeric || c == '+' || c == '-' || c == '_' || c == '.') {
+            serializer_append(buffer, (const char*)current, 1);
+        } else {
+            char encoded[] = { '%', hex[c >> 4], hex[c & 0x0F] };
+            serializer_append(buffer, encoded, sizeof(encoded));
+        }
+    }
+}
+
+
+size_t query_serialize(RStruct* s, RObject instance, void** out) {
+    SerializePolicy sp = {
+        .arr_end = "",
+        .arr_start = "",
+        .arr_sep = "",
+        .enum_as_string = 1,
+        .field_sep = "&",
+        .format_primitive = generic_numeric_to_str,
+        .indent_str = "",
+        .key_end = "",
+        .key_start = "",
+        .scape_keys = 0,
+        .key_val_sep = "=",
+        .newline = "",
+        .obj_end = "",
+        .obj_start = "",
+        .opt_none = NULL,
+        .opt_some_start = NULL,
+        .opt_some_end = NULL,
+        .unwrap_optionals = 1,
+        .repeat_array_fields = 1,
+        .pretty = 0,
+        .str_end = "",
+        .str_start = "",
+        .null_ptr = "0",
+        .null_str = "null",
+        .string_encode = query_url_encode
+    };
+    if (out) {
+        return walk_type(&sp, s, instance, out);
+    }
+    return 0;
+}
+
+
 
 static inline RField* qp_search_field(RStruct* restrict m, const char* restrict name_str, size_t name_str_len, size_t* f_idx) {
     for (size_t i = 0; i < m->n_elements; i++)

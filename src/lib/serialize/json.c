@@ -99,12 +99,13 @@ size_t json_serialize(RStruct* s, RObject instance, void** out ,int pretty) {
         .opt_some_start = NULL,
         .opt_some_end = NULL,
         .unwrap_optionals = 1,
+        .repeat_array_fields = 0,
         .pretty = pretty,
         .str_end = "\"",
         .str_start = "\"",
         .null_ptr = "0",
         .null_str = "\"\"",
-        .scape_special_ascii = 1
+        .string_encode = json_scape_string
     };
     if (out) {
         return walk_type(&sp, s, instance, out);

@@ -31,17 +31,14 @@ DEMO_C_FILES := $(shell find $(DEMO_DIR) -name "*.c")
 DEMO_OBJ     := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(DEMO_C_FILES))
 DEMO_BIN     := $(BIN_DIR)/crefl_demo
 
-# --- Query test ---
-QUERY_TEST_SRC      := tests/query_option_and_arrays.c
-QUERY_TEST_INPUT    := $(filter-out $(DEMO_DIR)/demo.c,$(PY_INPUT))
-QUERY_TEST_METADATA := build/query_test.crefl
-QUERY_TEST_BIN      := $(BIN_DIR)/query_option_and_arrays
-
 # --- Serialization tests ---
 TEST_INPUT          := $(filter-out $(DEMO_DIR)/demo.c,$(PY_INPUT))
-QUERY_TEST_SRC      := tests/query_deserialization.c
-QUERY_TEST_METADATA := build/query_test.crefl
-QUERY_TEST_BIN      := $(BIN_DIR)/query_deserialization
+QUERY_DESERIALIZE_SRC      := tests/query_deserialization.c
+QUERY_DESERIALIZE_METADATA := build/query_deserialization.crefl
+QUERY_DESERIALIZE_BIN      := $(BIN_DIR)/query_deserialization
+QUERY_SERIALIZE_SRC        := tests/query_serialize.c
+QUERY_SERIALIZE_METADATA   := build/query_serialize.crefl
+QUERY_SERIALIZE_BIN        := $(BIN_DIR)/query_serialize
 JSON_TEST_SRC       := tests/json_deserialization.c
 JSON_TEST_METADATA  := build/json_test.crefl
 JSON_TEST_BIN       := $(BIN_DIR)/json_deserialization
@@ -105,16 +102,27 @@ run_demo: build_demo
 # =========================================================
 # Query test
 # =========================================================
-$(QUERY_TEST_METADATA): $(TEST_INPUT) $(QUERY_TEST_SRC) | $(BIN_DIR)
-	$(PY_GEN) -i $(TEST_INPUT) $(QUERY_TEST_SRC) -o $@
+$(QUERY_DESERIALIZE_METADATA): $(TEST_INPUT) $(QUERY_DESERIALIZE_SRC) | $(BIN_DIR)
+	$(PY_GEN) -i $(TEST_INPUT) $(QUERY_DESERIALIZE_SRC) -o $@
 
-$(QUERY_TEST_BIN): $(QUERY_TEST_SRC) $(QUERY_TEST_METADATA) $(SHARED_LIB) | $(BIN_DIR)
-	$(CC) $(BASE_CFLAGS) -DCREFL_FILE=\"$(QUERY_TEST_METADATA)\" -o $@ $< \
+$(QUERY_DESERIALIZE_BIN): $(QUERY_DESERIALIZE_SRC) $(QUERY_DESERIALIZE_METADATA) $(SHARED_LIB) | $(BIN_DIR)
+	$(CC) $(BASE_CFLAGS) -DCREFL_FILE=\"$(QUERY_DESERIALIZE_METADATA)\" -o $@ $< \
 		-L$(LIB_DIR) -l$(TARGET) \
 		-Wl,-rpath,$(LIB_DIR)
 
-test_query: $(QUERY_TEST_BIN)
-	@$(QUERY_TEST_BIN)
+test_query_deserialize: $(QUERY_DESERIALIZE_BIN)
+	@$(QUERY_DESERIALIZE_BIN)
+
+$(QUERY_SERIALIZE_METADATA): $(TEST_INPUT) $(QUERY_SERIALIZE_SRC) | $(BIN_DIR)
+	$(PY_GEN) -i $(TEST_INPUT) $(QUERY_SERIALIZE_SRC) -o $@
+
+$(QUERY_SERIALIZE_BIN): $(QUERY_SERIALIZE_SRC) $(QUERY_SERIALIZE_METADATA) $(SHARED_LIB) | $(BIN_DIR)
+	$(CC) $(BASE_CFLAGS) -DCREFL_FILE=\"$(QUERY_SERIALIZE_METADATA)\" -o $@ $< \
+		-L$(LIB_DIR) -l$(TARGET) \
+		-Wl,-rpath,$(LIB_DIR)
+
+test_query_serialize: $(QUERY_SERIALIZE_BIN)
+	@$(QUERY_SERIALIZE_BIN)
 
 $(JSON_TEST_METADATA): $(TEST_INPUT) $(JSON_TEST_SRC) | $(BIN_DIR)
 	$(PY_GEN) -i $(TEST_INPUT) $(JSON_TEST_SRC) -o $@
@@ -143,4 +151,4 @@ clean:
 
 -include $(DEPS)
 
-.PHONY: all static clean run_demo build_demo test_query test_json
+.PHONY: all static clean run_demo build_demo test_query_deserialize test_query_serialize test_json
