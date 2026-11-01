@@ -360,7 +360,13 @@ skip_val:
 }
 
 DeserializeResult query_deserialize(RStruct* restrict schema, void* restrict stream, size_t stream_len) {
-    if (!schema || stream_len == 0) return RET_ERR(DE_NULL_PTR);
+    if (!schema || stream_len == 0) {
+        for (size_t i = 0; i < schema->n_elements; i++)
+        {
+            if (schema->fields[i]->kind != K_OPTION) return RET_ERR(DE_UNDEFINED_FIELDS);
+        }
+        return RET_OK(calloc(1, schema->total_size));
+    }
     stream_walker sw = { .buff = stream, .cur = 0, .eof = stream_len };
     size_t arena_brk = arena_get_brk();
     u8* instance = calloc(1, schema->total_size);

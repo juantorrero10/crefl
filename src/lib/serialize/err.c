@@ -28,7 +28,7 @@ char* deserialize_strerror(DeserializeError e) {
     case DE_UNCLOSED_DQUOTE:
         return "Unterminated dquote (\") in given stream.";
     case DE_NUMBER_CONVERSION_ERROR:
-        return "Couldn't get a numeric value from a JSON value on the given stream.";
+        return "Couldn't get a numeric value from a field on the given stream.";
     case DE_MEMORY_ERROR:
         return "Deserialization couldn't be completed due to a memory error.";
     case DE_UNKNOWN_KEYWORD:

@@ -29,12 +29,31 @@ REFLECT(struct) {
     DYN_ARRAY(query_color_t) dynamic_colors;
 } query_params_t;
 
+REFLECT(struct) {
+    OPTION(strZ) foo;
+    OPTION(i32) num;
+} qp_all_optionals_t;
+
 int main(void) {
     refl_load_metadata(CREFL_FILE);
     refl_threadlocal_init(0);
 
     RStruct* query_type = refl_fetch_struct("query_params_t");
     if (!query_type) return 1;
+
+    DeserializeResult parsed = query_deserialize(query_type, NULL, 0);
+    if (parsed.st != DR_ERR || parsed.err != DE_UNDEFINED_FIELDS) return 12;
+
+    RStruct* all_optionals_type = refl_fetch_struct("qp_all_optionals_t");
+    if (!all_optionals_type) return 13;
+    parsed = query_deserialize(all_optionals_type, NULL, 0);
+    if (parsed.st != DR_OK || !parsed.data.buff) return 14;
+    qp_all_optionals_t* all_optionals = parsed.data.buff;
+    if (all_optionals->foo.is_some || all_optionals->num.is_some) {
+        refl_generic_destructor(all_optionals_type, all_optionals);
+        return 15;
+    }
+    refl_generic_destructor(all_optionals_type, all_optionals);
 
     const char query[] =
         "required=present&optional=available&fixed=first&fixed=second"
@@ -44,7 +63,7 @@ int main(void) {
         "&color=QUERY_COLOR_GREEN&optional_color=QUERY_COLOR_BLUE"
         "&fixed_colors=QUERY_COLOR_RED&fixed_colors=QUERY_COLOR_BLUE"
         "&dynamic_colors=QUERY_COLOR_GREEN&dynamic_colors=QUERY_COLOR_RED";
-    DeserializeResult parsed = query_deserialize(
+    parsed = query_deserialize(
         query_type,
         (void*)query,
         sizeof(query) - 1
