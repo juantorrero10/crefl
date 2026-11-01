@@ -10,8 +10,6 @@
 #include <private/serial/common.h>
 #include <private/arena.h>
 
-/*
-    COMMENTED OUT TO make it compile: WIP
 #define num_detect(_char) ({\
     int __ret = 2;\
     switch(_char) {\
@@ -46,121 +44,115 @@
     __ret;\
 })
 
-#define wrapps_type(_field) (_field != K_OPTION) || (_field != K_DYN_ARRAY) || (_field != K_FIXED_ARRAY)
 
 #define DYN_ARRAY_CAPACITY 16
 
 #define currchar sw->buff[sw->cur]
 
-static char s_cstr_buff[4096];
-
-#define make_cstr(_str, size) ({            \
-    size_t __Sz = (size);                   \
-    memcpy(s_cstr_buff, (_str), __Sz);      \
-    s_cstr_buff[__Sz] = '\0';               \
-    s_cstr_buff;                            \
-})
-
-static inline RField* qp_search_field(RStruct* restrict m, const char* restrict field_name, size_t* f_idx) {
+static inline RField* qp_search_field(RStruct* restrict m, const char* restrict name_str, size_t name_str_len, size_t* f_idx) {
     for (size_t i = 0; i < m->n_elements; i++)
     {
         RField* f = m->fields[i];
-        if (!strcmp(field_name, f->name)) { *f_idx = i; return f; }
+        size_t len = strlen(f->name);
+        if (len == name_str_len && !memcmp(name_str, f->name, len)) { *f_idx = i; return f; }
     }
     return NULL;
 }
 
-// Advance cursor to the next key-value pair
-// key1=value1&key2=value2
-//      ^ START
-//            ^ END
-static DeserializeResult qp_read_val(
-    RStruct* restrict s, 
-    RField* restrict f, 
-    stream_walker* restrict sw,
-    size_t* restrict key_freqs, 
-    u8* restrict write_to,
-    bool wrapped_type
-) {
-    RField new_field = {0};
-    bool bool_val;
-    switch (currchar) {
-        case 'f': {
-            if (f->kind == K_PRIMITIVE && 
-                f->subtype.prim == P_BOOL && 
-                !memcmp("false", (const void*)&sw->buff[sw->cur], 5)
-            ) {
-                bool_val = false;
-            }
-            goto reading_bool;
+static inline char* qp_alloc_and_url_decode_string(const char* str, size_t len) {
+    char* ret = malloc(len + 1);
+    char digits_buff[3] = {0};
+    size_t dst_curr_off = 0;
+    for (size_t i = 0; i < len; i++)
+    {
+        if (str[i] == '%' && (len - i) > 2) {
+            digits_buff[0] = str[i + 1];
+            digits_buff[1] = str[i + 2];
+            i += 2;
+            char* p;
+            u32 byte = strtoul(digits_buff, &p, 16);
+            ret[dst_curr_off++] = (byte & 0xFF);
+            continue;
         }
-        case 't': {
-            if (f->kind == K_PRIMITIVE && 
-                f->subtype.prim == P_BOOL && 
-                !memcmp("true", (const void*)&sw->buff[sw->cur], 4)
-            ) {
-                bool_val = true;
-            }
-            goto reading_bool;
-        }
-        default:
-        if (num_detect(currchar) && f->kind == K_PRIMITIVE) {
-            goto reading_num;
-        }
-        break;  
+        ret[dst_curr_off++] = str[i];
     }
-reading_string:
-    new_field.kind = K_STRING;
-    new_field.size = 1;
-    if (f->kind != K_ENUM && !refl_comp_field_schema(&new_field, f)) 
-        return RET_ERR(DE_STREAM_INCOMPATIBLE);
-
-    // Cheat a bit an write to arena and allocate later when we know the size
-    char* alloced_dst = arena_alloc(0, 1);
-    size_t string_sz;
-    arena_dealloc(0, 1);
-    while(sw->cur < sw->eof && currchar != '&') {
-        *(alloced_dst + string_sz++) = currchar;
-    }
-    arena_alloc(0, string_sz + 1);
-    *(alloced_dst + string_sz) = '\0';
-    if (f->kind == K_ENUM) {
-        if (!refl_enum_has_label(f->subtype.e, alloced_dst))
-            return RET_ERR(DE_LABEL_NOT_FOUND);
-    }
-    refl_migrate_field(&new_field, f, (u8*)&alloced_dst, dst, 0, f->kind == K_OPTION);
-reading_num:
-    new_field.kind = K_PRIMITIVE;
-    u64 out_bytes;
-    if (generic_str_to_numeric(
-        sw,
-        &out_bytes,
-        &f->subtype.prim
-    )) {
-        return RET_ERR(DE_NUMBER_CONVERSION_ERROR);
-    }
-    if (!refl_comp_field_schema(&new_field, f)) {
-        return RET_ERR(DE_STREAM_INCOMPATIBLE);
-    }
-    
-reading_bool:
-
+    ret[dst_curr_off] = '\0';
+    return ret;
 }
 
-static DeserializeResult qp_read_pair(
-    RStruct* restrict model, 
-    stream_walker* restrict sw,
-    size_t* restrict key_freqs, 
-    u8* restrict instance,
-    size_t non_optional_counter
+struct mock_optional {
+    bool is_some;
+    void* val;
+};
+
+static inline void qp_insert_into_instance(
+    RField* restrict f_schema, 
+    u8* restrict instance, 
+    u8* restrict val, 
+    size_t val_sz,
+    size_t field_freq
 ) {
-    DeserializeError de;
+    size_t off = f_schema->offset;
+    RField* f = f_schema;
+    if (f->kind == K_OPTION) {
+        *(bool*)(instance + off) = true;
+        f = f->subtype.subfield;
+        off += offsetof(struct mock_optional, val);
+    }
+    if (f->kind == K_FIXED_ARRAY) {
+        off += (field_freq - 1) * val_sz;
+    }
+    // Heap dynamic array 
+    else if (f->kind == K_DYN_ARRAY) {
+        r_array_t* da = (r_array_t*)(instance + off);
+        if (field_freq == 1) {
+            da->array = calloc(DYN_ARRAY_CAPACITY, val_sz);
+            da->size = 0;
+            da->capacity = DYN_ARRAY_CAPACITY;
+            da->chunk_size = val_sz;
+        } else if (da->size >= da->capacity) {
+            da->capacity <<= 1;
+            da->array = realloc(da->array, da->capacity * da->chunk_size);
+            memset(da->array + (da->size * da->chunk_size), 0, (da->size * da->chunk_size));
+        }
+        da->size++;
+        memcpy(da->array + ((field_freq - 1) * val_sz), val, val_sz);
+        return;
+    }
+    // Regular copy
+    memcpy(instance + off, val, val_sz);
+}
+
+
+
+static DeserializeResult qp_parse(
+    RStruct* restrict schema, 
+    stream_walker* restrict sw,
+    u8* instance, 
+    size_t* restrict key_freqs, 
+    size_t fields_count
+) {
+    
+    const char* str_start;
+    size_t str_start_off;
     RField* field;
-    size_t f_idx = (size_t)-1;
-    size_t key_start_idx = sw->cur;
-    char* key_start = (char*)currchar;
-read_key_name:
-    if (sw->cur >= sw->eof) return RET_OK(NULL);
+    size_t field_idx = (size_t)-1;
+    RKind unwrapped_kind;
+reading_key:
+    str_start = (const char*)sw->buff + sw->cur;
+    str_start_off = sw->cur;
+    if (sw->cur >= sw->eof) {
+        for (size_t i = 0; i < fields_count; i++) {
+            RField* required = schema->fields[i];
+            if (required->kind == K_OPTION) continue;
+            if (key_freqs[i] == 0) return RET_ERR(DE_UNDEFINED_FIELDS);
+            if (required->kind == K_FIXED_ARRAY &&
+                key_freqs[i] < required->size) {
+                return RET_ERR(DE_UNDEFINED_FIELDS);
+            }
+        }
+        return RET_OK(NULL);
+    }
     while(currchar != '=') {
         if (sw->cur >= sw->eof)
             return RET_ERR(DE_UNEXPECTED_EOF);
@@ -168,104 +160,101 @@ read_key_name:
             return RET_ERR(DE_UNEXPECTED_CHARACTER);
         sw->cur++;
     }
-    field = qp_search_field(model, ({ size_t __Sz = (sw->cur - key_start_idx); memcpy(s_cstr_buff, (key_start), __Sz); s_cstr_buff[__Sz] = '\0'; s_cstr_buff; }), &f_idx);
-    if (!field)
-        return RET_ERR(DE_LABEL_NOT_FOUND);
+    if (sw->cur == str_start_off) goto skip_val;
+    field = qp_search_field(schema, str_start, (sw->cur - str_start_off), &field_idx);
+    if (!field) goto skip_val;
 
-    u8* write_to = instance + field->offset;
-    RField* dst_field = field; 
-    int unwrapped = 0;
-    key_freqs[f_idx]++;
-unwrap:
-    if (unwrapped >= 2) {
-        return RET_ERR(DE_TARGET_TYPE_TOO_COMPLEX);
-    }
-    if (field->kind == K_DYN_ARRAY) {
-        r_array_t* arr = (r_array_t*)write_to;
-        // Alloc or realloc array
-        if (key_freqs[f_idx] == 1) {
-            arr->array = calloc(DYN_ARRAY_CAPACITY, field->subtype.subfield->size);
-            arr->capacity = DYN_ARRAY_CAPACITY;
-            arr->size = 0;
-        } else if (arr->size >= arr->capacity) {
-            arr->capacity <<= 1;
-            arr->array = realloc(arr->array, arr->capacity);
-        }
-        write_to = arr->array = (key_freqs[f_idx] - 1) * field->subtype.subfield->size;
-        dst_field = field->subtype.subfield; 
-        unwrapped = 2;
-    } else {
-        if (field->kind == K_FIXED_ARRAY && (key_freqs[f_idx] <= field->size)) {
-            // Get offset inside of array
-            write_to += (key_freqs[f_idx] - 1) * field->subtype.subfield->size;
-            unwrapped = 2;
-        } else if (key_freqs[f_idx] != 1) {
-            // do not append to instance if out of bounds
-            goto skip_val;
-        }
-    } else if (field->kind == K_OPTION) {
-        non_optional_counter++;
-        r_option_t* opt = (r_option_t*)write_to;
-        write_to = opt->optional;
-        unwrapped++;
-        goto unwrap;
+    sw->cur++;
+
+    key_freqs[field_idx]++;
+    size_t field_holds = 1;
+
+    // Query parameters is a simple format, it does not include nested structures.
+    //  - Find target type (unwrapper_kind)
+    //  - Figure out how many values that fields holds
+    unwrapped_kind = field->kind;
+    switch (field->kind) {
+        case K_STRUCT:
+        case K_UNION:
+        case K_POINTER:
+            return RET_ERR(DE_TARGET_TYPE_TOO_COMPLEX);
+        case K_OPTION: 
+            unwrapped_kind = field->subtype.subfield->kind;
+            switch (unwrapped_kind) {
+                case K_DYN_ARRAY: 
+                    field_holds = (size_t)-1;
+                    unwrapped_kind = field->subtype.subfield->subtype.subfield->kind;
+                    break;
+                case K_FIXED_ARRAY:
+                    field_holds = field->subtype.subfield->size;
+                    unwrapped_kind = field->subtype.subfield->subtype.subfield->kind;
+                    break;
+                default: break;
+            }
+            break;
+        case K_DYN_ARRAY:
+            field_holds = (size_t)-1;
+            unwrapped_kind = field->subtype.subfield->kind;
+            break;
+        case K_FIXED_ARRAY:
+            field_holds = field->size;
+            unwrapped_kind = field->subtype.subfield->kind;
+            break;
+        default:
+            break;
     }
 
-    // Read and append value
-    DeserializeResult dr = qp_read_val(model, field, sw, key_freqs, field_instance);
-    if (dr.st == DR_ERR) {
-        return dr;
+    if (key_freqs[field_idx] > field_holds) goto skip_val;
+
+    switch (unwrapped_kind) {
+        case K_STRING:
+        // TODO: Enum label and numeric conversion
+        // case K_PRIMITIVE:
+        // case K_ENUM: 
+            break;
+        default: return RET_ERR(DE_TARGET_TYPE_TOO_COMPLEX);
     }
-    non_optional_counter--;
+
+    // Only string for now
+    str_start = (const char*)sw->buff + sw->cur;
+    str_start_off = sw->cur;
+    while(currchar != '&' && sw->cur < sw->eof) sw->cur++;
+    char* field_val = qp_alloc_and_url_decode_string(str_start, (sw->cur - str_start_off));
+    // Insert pointer into instance
+    qp_insert_into_instance(field, instance, (u8*)&field_val, sizeof(void*), key_freqs[field_idx]);
+    if (sw->cur < sw->eof) sw->cur++;
+    goto reading_key;
+
 skip_val:
-    // Advance until next key-val pair
-    while(currchar != '&' && sw->cur < sw->eof )sw->cur++;
-    if (sw->cur < sw->eof) { 
-        sw->cur++;
-        goto reading_key_name;
-    }
-    if (non_optional_counter != 0) {
-        return RET_ERR(DE_STREAM_INCOMPATIBLE);
-    }
-    return RET_OK(NULL);
+    while(currchar != '&' && sw->cur < sw->eof) sw->cur++;
+    sw->cur++;
+    goto reading_key;
 }
 
-DeserializeResult query_deserialize(RStruct* restrict model, void* restrict stream, size_t stream_len) {
-    if (!model || stream_len == 0) return RET_ERR(DE_NULL_PTR);
+DeserializeResult query_deserialize(RStruct* restrict schema, void* restrict stream, size_t stream_len) {
+    if (!schema || stream_len == 0) return RET_ERR(DE_NULL_PTR);
     stream_walker sw = { .buff = stream, .cur = 0, .eof = stream_len };
     size_t brk = arena_get_brk();
-    u8* instance = arena_alloc(0, model->total_size);
-    size_t* key_freqs = arena_alloc(0, sizeof(size_t) * model->n_elements);
-    memset(key_freqs, 0, sizeof(size_t) * model->total_size);
+    u8* instance = arena_alloc(0, schema->total_size);
+    memset(instance, 0, schema->total_size);
+    size_t* key_freqs = arena_alloc(0, sizeof(size_t) * schema->n_elements);
+    memset(key_freqs, 0, sizeof(size_t) * schema->n_elements);
     
     (void)sw;
     (void)brk;
-    (void)uob;
 
-    size_t non_optional_counter = 0;
-    for (size_t i = 0; i < model->n_elements; i++) {
-        if (model->fields[i]->kind != K_OPTION) non_optional_counter++;
-    }
-    
-
-    DeserializeResult dr = qp_read_pair(model, &sw, key_freqs, instance, non_optional_counter);
-    if (dr == DR_OK) {
-        arena_set_brk(brk);
-        if (jw.cur < jw.eof) {
+    DeserializeResult dr = qp_parse(schema, &sw, instance, key_freqs, schema->n_elements);
+    if (dr.st == DR_OK) {
+        if (sw.cur < sw.eof) {
+            arena_set_brk(brk);
             return RET_ERR(DE_EXPECTED_EOF);
         }
-        void* ret = malloc(model->total_size);
-        memcpy(ret, instance, model->total_size);
+        void* ret = malloc(schema->total_size);
+        memcpy(ret, instance, schema->total_size);
+        arena_set_brk(brk);
         return RET_OK(ret);
     }
 
     arena_set_brk(brk);
     return dr;
-}*/
-
-DeserializeResult query_deserialize(RStruct* restrict model, void* restrict stream, size_t stream_len) {
-    (void)model;
-    (void)stream_len;
-    (void)stream;
-    return RET_ERR(DE_NULL_PTR);   
 }

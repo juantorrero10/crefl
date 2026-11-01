@@ -28,7 +28,7 @@ typedef unsigned int u32;
 typedef unsigned long long u64;
 #endif
 
-
+// Special macros manually checked by Python's generator
 #define REFLECT(type) typedef type
 //#define OPTION(type) r_option_t
 #define DYN_ARRAY(type) r_array_t 

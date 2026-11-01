@@ -11,6 +11,10 @@ char* deserialize_strerror(DeserializeError e) {
         return "Non-homogeneus arrays are not supported for deserializing.";
     case DE_STREAM_INCOMPATIBLE:
         return "Given stream and given model type were not compatible.";
+    case DE_UNDEFINED_FIELDS:
+        return "Stream did not define all the required fields of the schema.";
+    case DE_TYPE_MISMATCH:
+        return "The type of a field defined in the schema did not match the observed type in the stream.";
     case DE_NULL_PTR:
         return "One or more parameters were NULL pointers.";
     case DE_SYNTAX_ERROR:

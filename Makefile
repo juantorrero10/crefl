@@ -4,7 +4,7 @@ CC          = gcc
 OPT ?= 0
 
 
-BASE_CFLAGS = -Wall -Wextra -Werror -std=c17 -Isrc/include -m64 -MMD -MP -g -O$(OPT)
+BASE_CFLAGS = -Wall -Wextra -Werror -std=c2x -Isrc/include -m64 -MMD -MP -g -O$(OPT)
 CFLAGS      = $(BASE_CFLAGS) -fPIC
 AR          = ar
 ARFLAGS     = rcs
@@ -30,6 +30,12 @@ DEPS    := $(OBJ:.o=.d)
 DEMO_C_FILES := $(shell find $(DEMO_DIR) -name "*.c")
 DEMO_OBJ     := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(DEMO_C_FILES))
 DEMO_BIN     := $(BIN_DIR)/crefl_demo
+
+# --- Query test ---
+QUERY_TEST_SRC      := tests/query_option_and_arrays.c
+QUERY_TEST_INPUT    := $(filter-out $(DEMO_DIR)/demo.c,$(PY_INPUT))
+QUERY_TEST_METADATA := build/query_test.crefl
+QUERY_TEST_BIN      := $(BIN_DIR)/query_option_and_arrays
 
 # --- Library outputs ---
 SHARED_LIB = $(LIB_DIR)/lib$(TARGET).so
@@ -88,6 +94,21 @@ run_demo: build_demo
 	@$(DEMO_BIN)
 
 # =========================================================
+# Query test
+# =========================================================
+$(QUERY_TEST_METADATA): $(QUERY_TEST_INPUT) $(QUERY_TEST_SRC) | $(BIN_DIR)
+	$(PY_GEN) -i $(QUERY_TEST_INPUT) $(QUERY_TEST_SRC) -o $@
+
+$(QUERY_TEST_BIN): $(QUERY_TEST_SRC) $(QUERY_TEST_METADATA) $(SHARED_LIB) | $(BIN_DIR)
+	$(CC) $(BASE_CFLAGS) -DCREFL_FILE=\"$(QUERY_TEST_METADATA)\" -o $@ $< \
+		-L$(LIB_DIR) -l$(TARGET) \
+		-Wl,-rpath,$(LIB_DIR)
+
+test_query: $(QUERY_TEST_BIN)
+	@$(QUERY_TEST_BIN)
+
+
+# =========================================================
 # Directories
 # =========================================================
 $(BIN_DIR) $(LIB_DIR):
@@ -102,4 +123,4 @@ clean:
 
 -include $(DEPS)
 
-.PHONY: all static clean run_demo build_demo
+.PHONY: all static clean run_demo build_demo test_query

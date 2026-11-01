@@ -21,12 +21,13 @@ The final piece is the C runtime. By loading the `.CREFL` binary at startup, the
  - Python dependencies: pycparser argparse
  - C dependencies: GCC, Make
 
-## Building the C Runtime
- - 
-
-## Integrating into a proyect
- - Add the command ```python3 crefl_gen -i [<Source files and headers>] -o [<Output file>]```
+## Adding Crefl into a proyect
+ - Clone the repo ```git clone https://github.com/juantorrero10/crefl/tree/master```
+ - Execute ```./build.sh``` to get all necessary files into ```./out``` and copy the folder onto your proyect.
+ - Add the command ```python3 ./out/crefl_gen -i [<Source files and headers>] -o [<Output file>]```
 to your build chain.
+ - Add include path ```./out/include```
+ - Link static library in ```./out/lib/libcrefl.a```
  - Loading onto C:
 ```c
 #include <crefl/core.h>
@@ -36,7 +37,7 @@ int main()
     // Load the metadata file globally
     refl_load_metadata(/* .crefl file path */);
     // Set up the runtime for the current thread
-    refl_threadlocal_init(0);
+    refl_threadlocal_init(0 /* 0 = Automatic cleanup on exit */);
 
     // ...
 }

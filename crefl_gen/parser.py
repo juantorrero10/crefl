@@ -200,7 +200,7 @@ class ReflVisitor(c_ast.NodeVisitor):
 
         base_type = self._get_base_type(decl_type)
 
-        if base_type == STRING_TYPE:
+        if base_type == STRING_TYPE and not isinstance(decl_type, c_ast.ArrayDecl):
             field["kind"] = "K_STRING"
             return field
 
