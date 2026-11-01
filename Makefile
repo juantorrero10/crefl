@@ -39,9 +39,12 @@ QUERY_DESERIALIZE_BIN      := $(BIN_DIR)/query_deserialization
 QUERY_SERIALIZE_SRC        := tests/query_serialize.c
 QUERY_SERIALIZE_METADATA   := build/query_serialize.crefl
 QUERY_SERIALIZE_BIN        := $(BIN_DIR)/query_serialize
-JSON_TEST_SRC       := tests/json_deserialization.c
-JSON_TEST_METADATA  := build/json_test.crefl
-JSON_TEST_BIN       := $(BIN_DIR)/json_deserialization
+JSON_DESERIALIZE_SRC      := tests/json_deserialization.c
+JSON_DESERIALIZE_METADATA := build/json_deserialization.crefl
+JSON_DESERIALIZE_BIN      := $(BIN_DIR)/json_deserialization
+JSON_SERIALIZE_SRC        := tests/json_serialize.c
+JSON_SERIALIZE_METADATA   := build/json_serialize.crefl
+JSON_SERIALIZE_BIN        := $(BIN_DIR)/json_serialize
 
 # --- Library outputs ---
 SHARED_LIB = $(LIB_DIR)/lib$(TARGET).so
@@ -124,16 +127,29 @@ $(QUERY_SERIALIZE_BIN): $(QUERY_SERIALIZE_SRC) $(QUERY_SERIALIZE_METADATA) $(SHA
 test_query_serialize: $(QUERY_SERIALIZE_BIN)
 	@$(QUERY_SERIALIZE_BIN)
 
-$(JSON_TEST_METADATA): $(TEST_INPUT) $(JSON_TEST_SRC) | $(BIN_DIR)
-	$(PY_GEN) -i $(TEST_INPUT) $(JSON_TEST_SRC) -o $@
+$(JSON_DESERIALIZE_METADATA): $(TEST_INPUT) $(JSON_DESERIALIZE_SRC) | $(BIN_DIR)
+	$(PY_GEN) -i $(TEST_INPUT) $(JSON_DESERIALIZE_SRC) -o $@
 
-$(JSON_TEST_BIN): $(JSON_TEST_SRC) $(JSON_TEST_METADATA) $(SHARED_LIB) | $(BIN_DIR)
-	$(CC) $(BASE_CFLAGS) -DCREFL_FILE=\"$(JSON_TEST_METADATA)\" -o $@ $< \
+$(JSON_DESERIALIZE_BIN): $(JSON_DESERIALIZE_SRC) $(JSON_DESERIALIZE_METADATA) $(SHARED_LIB) | $(BIN_DIR)
+	$(CC) $(BASE_CFLAGS) -DCREFL_FILE=\"$(JSON_DESERIALIZE_METADATA)\" -o $@ $< \
 		-L$(LIB_DIR) -l$(TARGET) \
 		-Wl,-rpath,$(LIB_DIR)
 
-test_json: $(JSON_TEST_BIN)
-	@$(JSON_TEST_BIN)
+test_json_deserialize: $(JSON_DESERIALIZE_BIN)
+	@$(JSON_DESERIALIZE_BIN)
+
+$(JSON_SERIALIZE_METADATA): $(TEST_INPUT) $(JSON_SERIALIZE_SRC) | $(BIN_DIR)
+	$(PY_GEN) -i $(TEST_INPUT) $(JSON_SERIALIZE_SRC) -o $@
+
+$(JSON_SERIALIZE_BIN): $(JSON_SERIALIZE_SRC) $(JSON_SERIALIZE_METADATA) $(SHARED_LIB) | $(BIN_DIR)
+	$(CC) $(BASE_CFLAGS) -DCREFL_FILE=\"$(JSON_SERIALIZE_METADATA)\" -o $@ $< \
+		-L$(LIB_DIR) -l$(TARGET) \
+		-Wl,-rpath,$(LIB_DIR)
+
+test_json_serialize: $(JSON_SERIALIZE_BIN)
+	@$(JSON_SERIALIZE_BIN)
+
+test_json: test_json_deserialize test_json_serialize
 
 
 # =========================================================
@@ -151,4 +167,4 @@ clean:
 
 -include $(DEPS)
 
-.PHONY: all static clean run_demo build_demo test_query_deserialize test_query_serialize test_json
+.PHONY: all static clean run_demo build_demo test_query_deserialize test_query_serialize test_json_deserialize test_json_serialize test_json

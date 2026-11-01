@@ -46,7 +46,11 @@ int main()
 
 ## Running tests
 
-Run the JSON deserialization and serialization tests with `make test_json`.
-Run the query deserialization tests with `make test_query`.
+Run the JSON deserialization tests with `make test_json_deserialize`, the
+serialization tests with `make test_json_serialize`, or both with `make test_json`.
+Run the query serialization and deserialization tests with
+`make test_query_serialize` and `make test_query_deserialize`.
+Run all tests, including Valgrind leak checks for the C test binaries, with
+`tests/run.sh`.
 The Python option-macro reflection tests can be run with
 `python3 tests/test_option_macros.py`.

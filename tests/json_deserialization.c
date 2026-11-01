@@ -128,12 +128,6 @@ int main() {
         parsed_option->opt_point.data.nested_str.is_some
     ) return 10;
 
-    void* json = NULL;
-    if (!json_serialize(optional_type, with_option, &json, 0) ||
-        !strstr(json, "opt_point") ||
-        !strstr(json, "1.500000")) return 8;
-    free(json);
-
     plain_query_test_t* without_option = refl_migrate_struct(
         optional_type,
         plain_type,
@@ -220,14 +214,6 @@ int main() {
         array_options->opt_fixed_points.arr[1].x != 9.5f ||
         array_options->opt_fixed_points.arr[1].y != 10.5f) return 18;
 
-    void* arrays_json = NULL;
-    if (!json_serialize(arrays_type, array_options, &arrays_json, 0) ||
-        !strstr(arrays_json, "\"opt_points\"") ||
-        !strstr(arrays_json, "\"opt_fixed_points\"") ||
-        !strstr(arrays_json, "5.500000") ||
-        !strstr(arrays_json, "10.500000")) return 19;
-    free(arrays_json);
-
     RStruct* values_type = refl_fetch_struct("json_values_t");
     if (!values_type) return 23;
     const char values_input[] =
@@ -254,26 +240,6 @@ int main() {
         !values->optional_number.is_some ||
         values->optional_number.data != 17 ||
         values->mode != JSON_MODE_ACTIVE) return 25;
-
-    void* values_json = NULL;
-    if (!json_serialize(values_type, values, &values_json, 0)) return 26;
-    DeserializeResult round_trip = json_deserialize(
-        values_type,
-        values_json,
-        strlen(values_json)
-    );
-    if (round_trip.st != DR_OK) return 27;
-    json_values_t* round_tripped_values = round_trip.data.buff;
-    if (!round_tripped_values->enabled ||
-        round_tripped_values->signed_value != values->signed_value ||
-        round_tripped_values->unsigned_value != values->unsigned_value ||
-        round_tripped_values->ratio != values->ratio ||
-        strcmp(round_tripped_values->text.data, values->text.data) ||
-        round_tripped_values->optional_text.is_some ||
-        !round_tripped_values->optional_number.is_some ||
-        round_tripped_values->optional_number.data != values->optional_number.data ||
-        round_tripped_values->mode != values->mode) return 28;
-    free(values_json);
 
     const char omitted_optionals[] =
         "{\"enabled\":false,\"signed_value\":0,\"unsigned_value\":0,"
@@ -377,7 +343,6 @@ int main() {
     refl_generic_destructor(arrays_type, migrated_arrays);
     refl_generic_destructor(plain_arrays_type, migrated_back);
     refl_generic_destructor(values_type, values);
-    refl_generic_destructor(values_type, round_tripped_values);
     refl_generic_destructor(values_type, omitted_values);
     refl_generic_destructor(values_type, ignored_unknown.data.buff);
     printf("JSON tests OK\n");
