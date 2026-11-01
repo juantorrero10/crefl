@@ -105,21 +105,6 @@ run_demo: build_demo
 # =========================================================
 # Query test
 # =========================================================
-$(QUERY_TEST_METADATA): $(QUERY_TEST_INPUT) $(QUERY_TEST_SRC) | $(BIN_DIR)
-	$(PY_GEN) -i $(QUERY_TEST_INPUT) $(QUERY_TEST_SRC) -o $@
-
-$(QUERY_TEST_BIN): $(QUERY_TEST_SRC) $(QUERY_TEST_METADATA) $(SHARED_LIB) | $(BIN_DIR)
-	$(CC) $(BASE_CFLAGS) -DCREFL_FILE=\"$(QUERY_TEST_METADATA)\" -o $@ $< \
-		-L$(LIB_DIR) -l$(TARGET) \
-		-Wl,-rpath,$(LIB_DIR)
-
-test_query: $(QUERY_TEST_BIN)
-	@$(QUERY_TEST_BIN)
-
-
-# =========================================================
-# Query test
-# =========================================================
 $(QUERY_TEST_METADATA): $(TEST_INPUT) $(QUERY_TEST_SRC) | $(BIN_DIR)
 	$(PY_GEN) -i $(TEST_INPUT) $(QUERY_TEST_SRC) -o $@
 
