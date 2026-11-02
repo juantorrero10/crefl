@@ -245,6 +245,7 @@ reading_key:
     if (!field) goto skip_val;
 
     sw->cur++;
+    if (sw->cur >= sw->eof) return RET_ERR(DE_UNEXPECTED_EOF);
 
     key_freqs[field_idx]++;
     size_t field_holds = 1;

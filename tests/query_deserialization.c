@@ -34,9 +34,72 @@ REFLECT(struct) {
     OPTION(i32) num;
 } qp_all_optionals_t;
 
+REFLECT(struct) {
+    double a;
+    strZ op;
+    double b;
+} query_operation_t;
+
 int main(void) {
     refl_load_metadata(CREFL_FILE);
     refl_threadlocal_init(0);
+
+    RStruct* operation_type = refl_fetch_struct("query_operation_t");
+    if (!operation_type) return 16;
+    const struct {
+        const char* query;
+        double a;
+        char op;
+        double b;
+        double result;
+    } operation_cases[] = {
+        {"?op=+&a=5.2&b=6.52", 5.2, '+', 6.52, 11.72},
+        {"?a=5.2&b=6.52&op=+", 5.2, '+', 6.52, 11.72},
+        {"?a=5.2&op=+&b=6", 5.2, '+', 6.0, 11.2},
+        {"?a=5.2&op=+&b=6.5", 5.2, '+', 6.5, 11.7}
+    };
+    for (size_t i = 0; i < sizeof(operation_cases) / sizeof(operation_cases[0]); i++) {
+        const char* query = operation_cases[i].query + 1;
+        DeserializeResult operation_parsed = query_deserialize(
+            operation_type,
+            (void*)query,
+            strlen(query)
+        );
+        if (operation_parsed.st != DR_OK) {
+            fprintf(stderr, "operation query %zu failed: %s\n", i, operation_parsed.data.err_str);
+            return 17;
+        }
+        query_operation_t* operation = operation_parsed.data.buff;
+        if (operation->a != operation_cases[i].a ||
+            !operation->op.data ||
+            operation->op.data[0] != operation_cases[i].op ||
+            operation->op.data[1] != '\0' ||
+            operation->b != operation_cases[i].b ||
+            ((operation->a + operation->b) - operation_cases[i].result > 1e-9) ||
+            (operation_cases[i].result - (operation->a + operation->b) > 1e-9)) {
+            fprintf(stderr,
+                "operation query %zu decoded as a=%lf, op=%s, b=%lf\n",
+                i,
+                operation->a,
+                operation->op.data ? operation->op.data : "(null)",
+                operation->b
+            );
+            refl_generic_destructor(operation_type, operation);
+            return 18;
+        }
+        refl_generic_destructor(operation_type, operation);
+    }
+    const char incomplete_operation[] = "a=5.2&op=+&b=";
+    DeserializeResult incomplete_parsed = query_deserialize(
+        operation_type,
+        (void*)incomplete_operation,
+        sizeof(incomplete_operation) - 1
+    );
+    if (incomplete_parsed.st != DR_ERR ||
+        incomplete_parsed.err != DE_UNEXPECTED_EOF) {
+        fprintf(stderr, "incomplete operation query did not report unexpected EOF\n");
+        return 19;
+    }
 
     RStruct* query_type = refl_fetch_struct("query_params_t");
     if (!query_type) return 1;
